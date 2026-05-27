@@ -30,8 +30,13 @@ x-slam-base: &slam-base
     - /tmp/.X11-unix:/tmp/.X11-unix:rw
     # HuggingFace model cache — avoids re-downloading VGGT-1B on every start
     - hf_cache:/root/.cache/huggingface
-    # Persist evaluation results on the host
-    - ./results:/ros2_ws/results
+    # ── Project folders mounted from the host ──────────────────────────────
+    # Source code: edit on the host, container rebuilds on next start
+    - ./:/ros2_ws/src/vggt_slam_ros2:ro
+    # Config: tweak params.yaml / cyclonedds.xml without rebuilding the image
+    - ./config:/ros2_ws/src/vggt_slam_ros2/config:rw
+    # Results: evaluation outputs written directly to the host
+    - ./results:/ros2_ws/results:rw
     # DDS config
     - ./docker/cyclonedds.xml:/etc/cyclonedds/cyclonedds.xml:ro
   # Host network = DDS discovery works exactly like a native ROS2 node.
