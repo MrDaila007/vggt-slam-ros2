@@ -1,0 +1,65 @@
+/**:
+  ros__parameters:
+
+    # ---------------------------------------------------------------
+    # VGGT model
+    # ---------------------------------------------------------------
+    # HuggingFace model ID or local path to VGGT checkpoint.
+    # Available options:
+    #   facebook/VGGT-1B          (non-commercial, original)
+    #   facebook/VGGT-1B-Commercial  (commercial-use checkpoint)
+    checkpoint: "facebook/VGGT-1B"
+
+    # Use bfloat16 precision (requires Ampere GPU, compute capability ≥ 8.0).
+    # Falls back to float16 automatically on older hardware.
+    use_bf16: true
+
+    # ---------------------------------------------------------------
+    # Sliding window
+    # ---------------------------------------------------------------
+    # Number of frames fed to VGGT per inference call.
+    # Larger window → better multi-view context, but more GPU memory & latency.
+    window_size: 16
+
+    # Number of NEW frames needed to trigger the next inference window.
+    # Overlap = window_size - window_stride  (shared frames between windows).
+    # Smaller stride → more overlap → better scale consistency at window seams.
+    window_stride: 8
+
+    # ---------------------------------------------------------------
+    # Keyframe selection
+    # ---------------------------------------------------------------
+    # Minimum mean optical-flow magnitude (pixels) to accept a new keyframe.
+    # Lower = more keyframes (denser map, more compute).
+    min_flow: 10.0
+
+    # Minimum rotation between frames (degrees) to accept regardless of flow.
+    min_rotation_deg: 2.0
+
+    # Maximum number of raw frames to wait before forcing a keyframe.
+    max_frames_between_kf: 30
+
+    # ---------------------------------------------------------------
+    # Point cloud filtering
+    # ---------------------------------------------------------------
+    # Percentile of VGGT confidence scores below which points are discarded.
+    # 0 = keep everything, 50 = keep top 50% confident points.
+    conf_threshold_pct: 20.0
+
+    # Voxel grid downsampling leaf size (metres). 0 = disabled.
+    voxel_size: 0.0
+
+    # ---------------------------------------------------------------
+    # TF / frame IDs
+    # ---------------------------------------------------------------
+    map_frame: "map"
+    camera_frame: "camera"
+
+    # ---------------------------------------------------------------
+    # Publishing
+    # ---------------------------------------------------------------
+    # Whether to periodically publish the full accumulated point cloud.
+    publish_full_map: true
+
+    # Period (seconds) between full-map publishes.
+    full_map_period: 5.0
