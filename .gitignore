@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# ROS2 build artifacts
+install/
+log/
+*.log
+
+# Model checkpoints & large files
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+
+# Data
+*.db3
+*.bag
+*.mcap
+*.pcd
+*.ply
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
