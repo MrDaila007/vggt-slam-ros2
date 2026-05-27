@@ -1,47 +1,47 @@
-# Как скачать датасет TUM RGB-D
+# How to Download the TUM RGB-D Dataset
 
-Сайт датасета: https://cvg.cit.tum.de/data/datasets/rgbd-dataset/download
+Dataset website: https://cvg.cit.tum.de/data/datasets/rgbd-dataset/download
 
 ---
 
-## Быстрый старт — одна последовательность
+## Quick Start — Single Sequence
 
-Для первого теста рекомендуется `fr1/desk` — небольшой (~600 МБ), снят в помещении со столом.
+For a first test, `fr1/desk` is recommended — small (~600 MB), indoor office scene.
 
 ```bash
 wget https://vision.in.tum.de/rgbd/dataset/freiburg1/rgbd_dataset_freiburg1_desk.tgz
 tar xzf rgbd_dataset_freiburg1_desk.tgz
 ```
 
-Проверь структуру:
+Verify the layout:
 
 ```
 rgbd_dataset_freiburg1_desk/
-├── rgb/                  ← цветные кадры (640×480, ~30 fps)
-├── depth/                ← карты глубины (16-bit PNG, мм)
-├── rgb.txt               ← метки времени и пути к файлам
+├── rgb/                  ← colour frames (640×480, ~30 fps)
+├── depth/                ← depth maps (16-bit PNG, mm)
+├── rgb.txt               ← timestamps and file paths
 ├── depth.txt
-├── groundtruth.txt       ← эталонная траектория (tx ty tz qx qy qz qw)
+├── groundtruth.txt       ← reference trajectory (timestamp tx ty tz qx qy qz qw)
 └── accelerometer.txt
 ```
 
 ---
 
-## Все последовательности fr1 (те же что использует VGGT-SLAM)
+## All fr1 Sequences (same set used by VGGT-SLAM)
 
-| Последовательность | Размер | Описание |
+| Sequence | Size | Description |
 |---|---|---|
-| `freiburg1_desk`   | ~600 МБ | Стол, офис — **рекомендуется для первого теста** |
-| `freiburg1_desk2`  | ~590 МБ | Стол, другой ракурс |
-| `freiburg1_room`   | ~1.5 ГБ | Целая комната, большая петля |
-| `freiburg1_floor`  | ~740 МБ | Камера смотрит вниз |
-| `freiburg1_plant`  | ~500 МБ | Растение на столе |
-| `freiburg1_teddy`  | ~660 МБ | Мягкая игрушка |
-| `freiburg1_xyz`    | ~480 МБ | Чистые поступательные движения |
-| `freiburg1_rpy`    | ~490 МБ | Чистые вращения |
-| `freiburg1_360`    | ~1.1 ГБ | Поворот на 360° |
+| `freiburg1_desk`  | ~600 MB | Desk, office — **recommended for first test** |
+| `freiburg1_desk2` | ~590 MB | Desk, different viewpoint |
+| `freiburg1_room`  | ~1.5 GB | Full room with a large loop |
+| `freiburg1_floor` | ~740 MB | Camera pointing downward |
+| `freiburg1_plant` | ~500 MB | Plant on a desk |
+| `freiburg1_teddy` | ~660 MB | Soft toy |
+| `freiburg1_xyz`   | ~480 MB | Pure translational motion |
+| `freiburg1_rpy`   | ~490 MB | Pure rotational motion |
+| `freiburg1_360`   | ~1.1 GB | 360° rotation |
 
-Скачать все сразу:
+Download all at once:
 
 ```bash
 BASE="https://vision.in.tum.de/rgbd/dataset/freiburg1"
@@ -53,43 +53,43 @@ done
 
 ---
 
-## Запуск скрипта оценки
+## Running the Evaluation Script
 
 ```bash
-# Одна последовательность
+# Single sequence
 python scripts/test_on_tum.py --dataset rgbd_dataset_freiburg1_desk
 
-# Результаты сохраняются в ./results/
+# Results are written to ./results/
 #   rgbd_dataset_freiburg1_desk_metrics.txt
 #   rgbd_dataset_freiburg1_desk_estimated_tum.txt
 #   rgbd_dataset_freiburg1_desk_trajectory.png
 
-# Дополнительная проверка через evo (если установлен: pip install evo)
+# Additional check with evo (install: pip install evo)
 evo_ape tum rgbd_dataset_freiburg1_desk/groundtruth.txt \
     results/rgbd_dataset_freiburg1_desk_estimated_tum.txt -a --plot
 ```
 
-Все параметры скрипта:
+All script options:
 
 ```
---dataset        путь к папке последовательности (обязательно)
---window_size    16       кадров на вызов VGGT
---window_stride  8        новых кадров между вызовами
---min_flow       10.0     минимальный оптический поток для ключевого кадра (px)
---conf_thr       20.0     отфильтровать нижние N% точек по уверенности
---max_frames     0        ограничить число кадров (0 = все)
---out_dir        results/ папка для результатов
---no_plot                 не строить график
+--dataset        path to the sequence directory (required)
+--window_size    16       frames per VGGT call
+--window_stride  8        new frames between calls
+--min_flow       10.0     minimum optical flow to accept a keyframe (px)
+--conf_thr       20.0     filter bottom N% of points by confidence
+--max_frames     0        cap on number of frames (0 = all)
+--out_dir        results/ output directory
+--no_plot                 skip matplotlib visualisation
 ```
 
 ---
 
-## Требования
+## Requirements
 
 ```bash
 pip install torch torchvision opencv-python numpy matplotlib
-pip install -e /path/to/vggt          # VGGT из исходников
+pip install -e /path/to/vggt          # VGGT from source
 
-# опционально, для дополнительной оценки метрик
+# Optional — additional metric evaluation
 pip install evo
 ```
