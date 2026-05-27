@@ -36,8 +36,14 @@
 ## Stage 3 — Polish and Usability
 
 - [ ] `config/vggt_slam.rviz` — RViz2 config with PointCloud2, Path, TF, Depth displays
-- [ ] `Dockerfile` — reproducible environment (CUDA + ROS2 Humble/Jazzy + VGGT)
-- [ ] `docker-compose.yaml` — slam_node + rviz2 services
+- [x] `docker/humble/Dockerfile` — Ubuntu 22.04 + CUDA 12.1 + ROS2 Humble
+- [x] `docker/jazzy/Dockerfile` — Ubuntu 24.04 + CUDA 12.4 + ROS2 Jazzy
+- [x] `docker-compose.yml` — profiles for Humble and Jazzy, NVIDIA GPU passthrough, host network
+- [x] `docker/entrypoint.sh` — sources ROS2 and workspace on container start
+- [x] `docker/cyclonedds.xml` — DDS config for robot network connectivity
+- [x] `Makefile` — build / run / shell / clean convenience targets
+- [x] `.dockerignore` — exclude build artifacts and model files from build context
+- [x] `docker/README.md` — host setup, build, run, and robot connection instructions
 - [ ] GitHub Actions CI — flake8 + mypy + `colcon build` check on every push
 - [ ] `scripts/eval_all_tum.sh` — run all 9 fr1 sequences and write results to `results/`
 - [ ] Demo video — recorded on an office/apartment dataset for the README

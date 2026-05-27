@@ -1,0 +1,86 @@
+# ============================================================
+# vggt-slam-ros2 — ROS2 Humble (Ubuntu 22.04 + CUDA 12.1)
+# ============================================================
+#
+# Build:
+#   docker build -f docker/humble/Dockerfile -t vggt-slam-ros2:humble .
+#
+# Requirements on the host:
+#   - nvidia-container-toolkit installed and configured
+#   - NVIDIA driver >= 525 (CUDA 12.1 compatible)
+
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# ── NVIDIA runtime flags ─────────────────────────────────────────────────────
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,display
+
+# ── System base ──────────────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl gnupg2 lsb-release ca-certificates \
+    python3-pip python3-dev \
+    git wget \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── ROS2 Humble ──────────────────────────────────────────────────────────────
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc \
+    | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) \
+    signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
+    http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" \
+    > /etc/apt/sources.list.d/ros2.list
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-ros-base \
+    ros-humble-cv-bridge \
+    ros-humble-image-transport \
+    ros-humble-tf2-ros \
+    ros-humble-tf2-geometry-msgs \
+    ros-humble-nav2-lifecycle-manager \
+    ros-humble-diagnostic-msgs \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV ROS_DISTRO=humble
+
+# ── PyTorch (CUDA 12.1) ───────────────────────────────────────────────────────
+RUN pip3 install --no-cache-dir \
+    torch==2.2.2 torchvision==0.17.2 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# ── Python dependencies ───────────────────────────────────────────────────────
+RUN pip3 install --no-cache-dir \
+    numpy>=1.24.0 \
+    Pillow>=10.0.0 \
+    opencv-python-headless>=4.8.0 \
+    huggingface_hub>=0.20.0 \
+    open3d>=0.17.0
+
+# ── VGGT ─────────────────────────────────────────────────────────────────────
+# Pin to a specific commit for reproducible builds.
+# Override with: --build-arg VGGT_REF=<commit-or-tag>
+ARG VGGT_REF=main
+RUN pip3 install --no-cache-dir \
+    "git+https://github.com/facebookresearch/vggt.git@${VGGT_REF}"
+
+# ── Copy and build our package ───────────────────────────────────────────────
+WORKDIR /ros2_ws
+COPY . src/vggt_slam_ros2/
+
+RUN bash -c "source /opt/ros/humble/setup.bash && \
+    colcon build \
+        --packages-select vggt_slam_ros2 \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release \
+    && rm -rf build log"
+
+# ── Entrypoint ────────────────────────────────────────────────────────────────
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["ros2", "launch", "vggt_slam_ros2", "vggt_slam.launch.py"]

@@ -1,0 +1,34 @@
+<!--
+  CycloneDDS configuration for robot network connectivity.
+
+  By default this config uses multicast on all available interfaces,
+  which works automatically with --network host.
+
+  To restrict to a specific network interface (e.g. on a multi-homed host),
+  uncomment the NetworkInterface section and set the name to your interface
+  (e.g. eth0, wlan0, enp3s0).
+
+  To connect to a robot on a known IP without multicast,
+  uncomment the Peers section and add the robot's IP address.
+-->
+<CycloneDDS>
+  <Domain>
+    <General>
+      <!-- Uncomment to bind to a specific network interface:
+      <NetworkInterface name="eth0" multicast="true"/>
+      -->
+
+      <!-- Uncomment to disable multicast and use unicast peers instead:
+      <AllowMulticast>false</AllowMulticast>
+      -->
+    </General>
+
+    <Discovery>
+      <!-- Uncomment and add robot IPs for unicast discovery:
+      <Peers>
+        <Peer Address="192.168.1.100"/>
+      </Peers>
+      -->
+    </Discovery>
+  </Domain>
+</CycloneDDS>

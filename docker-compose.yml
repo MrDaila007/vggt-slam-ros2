@@ -1,0 +1,84 @@
+# vggt-slam-ros2 — Docker Compose
+#
+# Usage:
+#   docker compose --profile humble up    # ROS2 Humble
+#   docker compose --profile jazzy  up    # ROS2 Jazzy
+#
+# Override camera topics:
+#   IMAGE_TOPIC=/camera/color/image_raw docker compose --profile humble up
+#
+# Prerequisite on the host:
+#   sudo apt install nvidia-container-toolkit
+#   sudo nvidia-ctk runtime configure --runtime=docker
+#   sudo systemctl restart docker
+
+x-slam-base: &slam-base
+  # ── NVIDIA GPU passthrough ──────────────────────────────────────────────────
+  runtime: nvidia
+  environment: &base-env
+    - NVIDIA_VISIBLE_DEVICES=all
+    - NVIDIA_DRIVER_CAPABILITIES=compute,utility,display
+    # ROS2 domain — must match the robot's domain ID
+    - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    # DDS configuration file mounted below
+    - CYCLONEDDS_URI=file:///etc/cyclonedds/cyclonedds.xml
+    # X11 forwarding for RViz2 (optional)
+    - DISPLAY=${DISPLAY:-:0}
+    - QT_X11_NO_MITSHM=1
+  volumes: &base-volumes
+    # X11 socket for RViz2
+    - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    # HuggingFace model cache — avoids re-downloading VGGT-1B on every start
+    - hf_cache:/root/.cache/huggingface
+    # Persist evaluation results on the host
+    - ./results:/ros2_ws/results
+    # DDS config
+    - ./docker/cyclonedds.xml:/etc/cyclonedds/cyclonedds.xml:ro
+  # Host network = DDS discovery works exactly like a native ROS2 node.
+  # The container sees the same network as the robot.
+  network_mode: host
+  restart: unless-stopped
+  stdin_open: true
+  tty: true
+
+services:
+
+  # ── ROS2 Humble ─────────────────────────────────────────────────────────────
+  vggt-slam-humble:
+    <<: *slam-base
+    profiles: [humble]
+    image: vggt-slam-ros2:humble
+    build:
+      context: .
+      dockerfile: docker/humble/Dockerfile
+      args:
+        VGGT_REF: ${VGGT_REF:-main}
+    environment:
+      <<: *base-env
+      ROS_DISTRO: humble
+    command: >
+      ros2 launch vggt_slam_ros2 vggt_slam.launch.py
+      image_topic:=${IMAGE_TOPIC:-/camera/image_raw}
+      camera_info_topic:=${CAMERA_INFO_TOPIC:-/camera/camera_info}
+
+  # ── ROS2 Jazzy ──────────────────────────────────────────────────────────────
+  vggt-slam-jazzy:
+    <<: *slam-base
+    profiles: [jazzy]
+    image: vggt-slam-ros2:jazzy
+    build:
+      context: .
+      dockerfile: docker/jazzy/Dockerfile
+      args:
+        VGGT_REF: ${VGGT_REF:-main}
+    environment:
+      <<: *base-env
+      ROS_DISTRO: jazzy
+    command: >
+      ros2 launch vggt_slam_ros2 vggt_slam.launch.py
+      image_topic:=${IMAGE_TOPIC:-/camera/image_raw}
+      camera_info_topic:=${CAMERA_INFO_TOPIC:-/camera/camera_info}
+
+volumes:
+  # Named volume so the ~2-4 GB VGGT model is downloaded only once
+  hf_cache:
