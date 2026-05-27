@@ -93,4 +93,23 @@ ros2 service call /vggt_slam/vggt_slam_node/reset std_srvs/srv/Empty
 
 ## License
 
-Apache-2.0. Note: VGGT model weights have their own license (see the VGGT repo).
+The **source code** of this package is licensed under **Apache-2.0**
+(see [LICENSE](LICENSE)).
+
+### ⚠️ VGGT model license — read before use
+
+VGGT source code and model weights are distributed under a **separate custom
+Meta Research License** that is **not** Apache-2.0.
+
+| Checkpoint | Commercial use |
+|---|---|
+| `facebook/VGGT-1B` *(default)* | **Non-commercial / research only** |
+| `facebook/VGGT-1B-Commercial` | Allowed after Meta approval via HuggingFace |
+
+**Military and weapons applications are explicitly prohibited.**
+
+If you use this package commercially:
+1. Apply for `VGGT-1B-Commercial` at HuggingFace
+2. Set `checkpoint: "facebook/VGGT-1B-Commercial"` in `config/params.yaml`
+
+Full details: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
