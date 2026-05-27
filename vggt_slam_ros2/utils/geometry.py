@@ -60,7 +60,10 @@ def normalize_scale(poses: np.ndarray, ref_idx: int = 0) -> tuple[np.ndarray, fl
     """
     translations = poses[:, :3, 3]
     diffs = np.linalg.norm(np.diff(translations, axis=0), axis=1)
-    mean_dist = float(np.mean(diffs[diffs > 1e-6]))
+    moving = diffs[diffs > 1e-6]
+    if len(moving) == 0:
+        return poses, 1.0
+    mean_dist = float(np.mean(moving))
     if mean_dist < 1e-8:
         return poses, 1.0
 

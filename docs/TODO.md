@@ -46,6 +46,12 @@
 - [x] `docker/README.md` — host setup, build, run, and robot connection instructions
 - [x] `docker-compose.yml` volumes — project source, config, results, hf_cache mounted from host
 - [x] README Docker section — full guide: host setup, build, run, mounted folders, robot connection
+- [x] `test/test_keyframe_selector.py` — 10 tests for KeyframeSelector (flow, max gap, reset)
+- [x] `test/test_sliding_window.py` — 16 tests for SlidingWindow (timing, content, flush, reset)
+- [x] `test/test_map_manager.py` — 16 tests for MapManager (overlap, confidence, trajectory, reset)
+- [x] `test/test_geometry.py` — 19 tests for geometry utils (SE3, transform, filter, normalize)
+- [x] `test/test_ros_conversions.py` — 18 tests for ROS2 conversions (skipped without ROS2)
+- [x] `test/conftest.py` — shared fixtures; 70 passed, 1 skipped (ROS2 not available)
 - [ ] GitHub Actions CI — flake8 + mypy + `colcon build` check on every push
 - [ ] `scripts/eval_all_tum.sh` — run all 9 fr1 sequences and write results to `results/`
 - [ ] Demo video — recorded on an office/apartment dataset for the README
