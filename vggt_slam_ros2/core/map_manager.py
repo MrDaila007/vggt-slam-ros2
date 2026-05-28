@@ -130,6 +130,44 @@ class MapManager:
         self._frames.clear()
         self._total_points = 0
 
+    def save_to_file(self, path: str, fmt: str = "pcd") -> bool:
+        """
+        Save the accumulated point cloud to disk.
+
+        Parameters
+        ----------
+        path : absolute file path (extension is replaced with `fmt`)
+        fmt  : "pcd", "ply", or "npz"
+
+        Returns True on success, False on failure.
+        Open3D is used for pcd/ply; falls back to npz if not available.
+        """
+        from pathlib import Path as _Path
+
+        pts  = self.get_all_points()
+        cols = self.get_all_colors()
+
+        if pts.shape[0] == 0:
+            return False
+
+        out_path = _Path(path).with_suffix(f".{fmt}")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if fmt in ("pcd", "ply"):
+            try:
+                import open3d as o3d
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(pts.astype(np.float64))
+                pcd.colors = o3d.utility.Vector3dVector(cols.astype(np.float64) / 255.0)
+                o3d.io.write_point_cloud(str(out_path), pcd, write_ascii=False)
+                return True
+            except ImportError:
+                fmt = "npz"   # fall through to npz
+                out_path = _Path(path).with_suffix(".npz")
+
+        np.savez_compressed(str(out_path), points=pts, colors=cols)
+        return True
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
