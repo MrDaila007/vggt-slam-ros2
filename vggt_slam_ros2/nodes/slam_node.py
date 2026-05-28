@@ -55,6 +55,8 @@ from vggt_slam_ros2.core.keyframe_selector import KeyframeSelector
 from vggt_slam_ros2.core.sliding_window import SlidingWindow, Keyframe
 from vggt_slam_ros2.core.map_manager import MapManager
 from vggt_slam_ros2.core.scale_anchor import ScaleAnchor
+from vggt_slam_ros2.core.image_retrieval import ImageRetrieval
+from vggt_slam_ros2.core.pose_graph import PoseGraph, extrinsic_to_world, relative_pose
 from vggt_slam_ros2.utils.ros_conversions import (
     numpy_to_pointcloud2,
     extrinsic_to_transform,
@@ -78,6 +80,14 @@ class VGGTSlamNode(LifecycleNode):
         self._scale_anchor: ScaleAnchor | None = None
         self._tf_broadcaster: TransformBroadcaster | None = None
         self._path_msg = Path()
+
+        # Stage 2: loop closure (optional)
+        self._lc_enabled: bool = False
+        self._lc_retrieval: ImageRetrieval | None = None
+        self._lc_pose_graph: PoseGraph | None = None
+        self._lc_kf_images: list[np.ndarray] = []   # stored representative images
+        self._lc_extrinsics: list[np.ndarray] = []  # global extrinsics per pose node
+        self._lc_node_count: int = 0
 
         # Async inference queue (image → inference thread → result)
         self._infer_queue: queue.Queue = queue.Queue(maxsize=2)
@@ -122,6 +132,21 @@ class VGGTSlamNode(LifecycleNode):
                 use_bf16=p['use_bf16'],
             )
             self.get_logger().info("VGGT loaded.")
+
+            # Stage 2: optional loop closure
+            self._lc_enabled = p['enable_loop_closure']
+            if self._lc_enabled:
+                self.get_logger().info("Initialising loop closure (DINOv2 + GTSAM)...")
+                self._lc_retrieval = ImageRetrieval(
+                    similarity_threshold=p['lc_similarity_threshold'],
+                    min_time_gap=p['lc_min_time_gap'],
+                    load_on_init=True,
+                )
+                self._lc_pose_graph = PoseGraph()
+                self._lc_kf_images = []
+                self._lc_extrinsics = []
+                self._lc_node_count = 0
+                self.get_logger().info("Loop closure ready.")
 
             # Publishers / subscribers / tf created in on_activate
         except Exception as e:
@@ -331,6 +356,100 @@ class VGGTSlamNode(LifecycleNode):
         # Depth image of the last frame
         self._publish_depth(result['depth'][-1], ros_stamp)
 
+        # Stage 2: loop closure detection and pose graph optimisation
+        if self._lc_enabled:
+            self._process_loop_closure(images_rgb, stamps, extrinsics_g, ros_stamp)
+
+    # ==================================================================
+    # Stage 2: Loop closure
+    # ==================================================================
+
+    def _process_loop_closure(
+        self,
+        images_rgb: list[np.ndarray],
+        stamps: list[float],
+        extrinsics_g: np.ndarray,
+        ros_stamp,
+    ) -> None:
+        """
+        Detect loop closures, run VGGT re-inference for constraint, and
+        optimise the pose graph.
+        """
+        new_start = self._overlap if self._lc_node_count > 0 else 0
+        new_frames = list(range(new_start, len(images_rgb)))
+        if not new_frames:
+            return
+
+        # Representative frame: middle of the new frames
+        rep_idx = new_frames[len(new_frames) // 2]
+        rep_image = images_rgb[rep_idx]
+        rep_stamp = stamps[rep_idx]
+        rep_ext = extrinsics_g[rep_idx]  # (3, 4) cam-from-world, global frame
+        rep_world = extrinsic_to_world(rep_ext)  # (4, 4) world-from-cam
+
+        # Add to pose graph (one node per representative frame)
+        node_idx = self._lc_pose_graph.add_pose(rep_world)
+        self._lc_kf_images.append(rep_image)
+        self._lc_extrinsics.append(rep_ext)
+        self._lc_node_count += 1
+
+        # Query image retrieval for a loop candidate
+        candidate = self._lc_retrieval.add_and_query(rep_image, rep_stamp)
+        if candidate is None:
+            return
+
+        self.get_logger().info(
+            f"Loop candidate: node {node_idx} ↔ node {candidate.match_idx} "
+            f"(sim={candidate.similarity:.3f})"
+        )
+
+        # Estimate relative pose via VGGT re-inference on 2 frames
+        matched_image = self._lc_kf_images[candidate.match_idx]
+        try:
+            lc_result = self._vggt.infer([rep_image, matched_image])
+            # extrinsics[0] = current frame, extrinsics[1] = matched frame (in 2-frame window)
+            ext_curr_local = lc_result['extrinsics'][0]
+            ext_match_local = lc_result['extrinsics'][1]
+            T_curr_local = extrinsic_to_world(ext_curr_local)
+            T_match_local = extrinsic_to_world(ext_match_local)
+            # Relative pose: from current → matched (in the 2-frame local frame)
+            T_curr_to_match = relative_pose(T_curr_local, T_match_local)
+        except Exception as e:
+            self.get_logger().warn(f"Loop closure VGGT re-inference failed: {e}")
+            return
+
+        self._lc_pose_graph.add_loop(
+            from_idx=node_idx,
+            to_idx=candidate.match_idx,
+            T_rel=T_curr_to_match,
+        )
+
+        # Optimise and republish corrected path
+        try:
+            corrected = self._lc_pose_graph.optimize()
+            self._lc_pose_graph.update_initial_values(corrected)
+
+            # Rebuild path from corrected poses
+            self._path_msg = Path()
+            self._path_msg.header.frame_id = self._map_frame
+            for i, ext_orig in enumerate(self._lc_extrinsics):
+                if i in corrected:
+                    T_corr = corrected[i]
+                    from vggt_slam_ros2.core.pose_graph import world_to_extrinsic
+                    ext_corr = world_to_extrinsic(T_corr)
+                else:
+                    ext_corr = ext_orig
+                ps = extrinsic_to_pose_stamped(ext_corr, self._map_frame, ros_stamp)
+                self._path_msg.poses.append(ps)
+            self._path_msg.header.stamp = ros_stamp
+            self._path_pub.publish(self._path_msg)
+            self.get_logger().info(
+                f"Pose graph optimised after loop closure "
+                f"({self._lc_pose_graph.pose_count} nodes)"
+            )
+        except Exception as e:
+            self.get_logger().warn(f"Pose graph optimisation failed: {e}")
+
     # ==================================================================
     # Publishers
     # ==================================================================
@@ -376,6 +495,13 @@ class VGGTSlamNode(LifecycleNode):
         self._map.reset()
         self._kf_selector.reset()
         self._window.reset()
+        self._scale_anchor.reset()
+        if self._lc_enabled and self._lc_retrieval:
+            self._lc_retrieval.reset()
+            self._lc_pose_graph = PoseGraph()
+            self._lc_kf_images.clear()
+            self._lc_extrinsics.clear()
+            self._lc_node_count = 0
         self._path_msg = Path()
         self._path_msg.header.frame_id = self._map_frame
         return response
@@ -398,6 +524,10 @@ class VGGTSlamNode(LifecycleNode):
         self.declare_parameter('camera_frame', 'camera')
         self.declare_parameter('publish_full_map', True)
         self.declare_parameter('full_map_period', 5.0)   # seconds
+        # Stage 2 — loop closure
+        self.declare_parameter('enable_loop_closure', False)
+        self.declare_parameter('lc_similarity_threshold', 0.85)
+        self.declare_parameter('lc_min_time_gap', 10.0)
 
     def _get_params(self) -> dict:
         return {
@@ -414,6 +544,9 @@ class VGGTSlamNode(LifecycleNode):
             'camera_frame':        self.get_parameter('camera_frame').value,
             'publish_full_map':    self.get_parameter('publish_full_map').value,
             'full_map_period':     self.get_parameter('full_map_period').value,
+            'enable_loop_closure': self.get_parameter('enable_loop_closure').value,
+            'lc_similarity_threshold': self.get_parameter('lc_similarity_threshold').value,
+            'lc_min_time_gap':     self.get_parameter('lc_min_time_gap').value,
         }
 
     @staticmethod
