@@ -107,7 +107,7 @@ or integration into an external SLAM back-end.
 All parameters exposed via ROS2 parameter server (`config/params.yaml`).
 Every parameter is documented inline. No hardcoded values in node code.
 
-### 1.10 Scale anchoring ⬜
+### 1.10 Scale anchoring ✅
 
 **Problem:** VGGT infers scene geometry up to an unknown scale. Consecutive
 windows are independently scaled, so the global map accumulates scale drift.
@@ -121,7 +121,7 @@ windows are independently scaled, so the global map accumulates scale drift.
 This keeps scale consistent across window boundaries without requiring a
 full pose-graph optimisation at every step.
 
-### 1.11 TUM RGB-D evaluation ⬜
+### 1.11 TUM RGB-D evaluation 🔄
 
 Run `scripts/test_on_tum.py` on all 9 fr1 sequences. Record ATE RMSE as the
 Stage 1 baseline. Compare against published VGGT-SLAM numbers.
@@ -140,7 +140,7 @@ The script:
 **Goal:** detect revisited places and correct the accumulated trajectory error
 with a global optimisation.
 
-### 2.1 Image retrieval (`core/image_retrieval.py`) ⬜
+### 2.1 Image retrieval (`core/image_retrieval.py`) ✅
 
 Use **DINOv2** (ViT-B/14, Apache-2.0) to embed keyframes into a descriptor space.
 At each new keyframe, compute cosine similarity against all previous embeddings.
@@ -153,7 +153,7 @@ DINOv2 was chosen over NetVLAD because:
 - Available on HuggingFace without manual download
 - Competitive recall on indoor scenes
 
-### 2.2 Pose graph (`core/pose_graph.py`) ⬜
+### 2.2 Pose graph (`core/pose_graph.py`) ✅
 
 GTSAM factor graph with:
 - **Between factors** for consecutive window poses (from VGGT relative pose)
@@ -184,7 +184,7 @@ Report ATE RMSE before and after loop closure to quantify the improvement.
 
 **Goal:** the project is ready for public use and GitHub publication.
 
-### 3.1 RViz2 configuration ⬜
+### 3.1 RViz2 configuration ✅
 
 `config/vggt_slam.rviz` pre-configured with:
 - **PointCloud2** display for `~/pointcloud_full` (RGB colouring)
@@ -193,7 +193,7 @@ Report ATE RMSE before and after loop closure to quantify the improvement.
 - **Image** display for `~/depth` (colormap)
 - Fixed frame set to `map`
 
-### 3.2 Docker ⬜
+### 3.2 Docker ✅
 
 `Dockerfile` based on `nvidia/cuda:12.1-cudnn8-runtime-ubuntu22.04`:
 - ROS2 Humble base
@@ -205,14 +205,14 @@ Report ATE RMSE before and after loop closure to quantify the improvement.
 - `slam` — GPU-enabled SLAM node
 - `rviz` — RViz2 with X11 forwarding
 
-### 3.3 GitHub Actions CI ⬜
+### 3.3 GitHub Actions CI ✅
 
 `.github/workflows/ci.yml`:
 - Trigger: push and pull request to `main`
 - Jobs: `flake8` (style), `mypy` (types), `colcon build --packages-select vggt_slam_ros2`
 - Docker image cache to keep builds fast
 
-### 3.4 Batch evaluation script ⬜
+### 3.4 Batch evaluation script ✅
 
 `scripts/eval_all_tum.sh` — loops over all 9 fr1 sequences, calls
 `test_on_tum.py` for each, collects results into `results/summary.csv`.
