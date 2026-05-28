@@ -89,9 +89,8 @@ eval-tum:
 	  -v $(PWD)/results:/ros2_ws/results:rw \
 	  -v $(PWD):/ros2_ws/src/vggt_slam_ros2:ro \
 	  -e PYTHONPATH=/opt/vggt:/ros2_ws/src/vggt_slam_ros2 \
-	  --workdir /ros2_ws/src/vggt_slam_ros2 \
 	  $(HUMBLE_IMAGE) \
-	  python3 scripts/test_on_tum.py \
+	  python3 /ros2_ws/src/vggt_slam_ros2/scripts/test_on_tum.py \
 	    --dataset /ros2_ws/$(TUM_DATASET) \
 	    --out_dir /ros2_ws/results \
 	    --max_frames $(MAX_FRAMES)
