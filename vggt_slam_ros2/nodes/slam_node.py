@@ -54,6 +54,7 @@ from vggt_slam_ros2.core.vggt_wrapper import VGGTWrapper
 from vggt_slam_ros2.core.keyframe_selector import KeyframeSelector
 from vggt_slam_ros2.core.sliding_window import SlidingWindow, Keyframe
 from vggt_slam_ros2.core.map_manager import MapManager
+from vggt_slam_ros2.core.scale_anchor import ScaleAnchor
 from vggt_slam_ros2.utils.ros_conversions import (
     numpy_to_pointcloud2,
     extrinsic_to_transform,
@@ -74,6 +75,7 @@ class VGGTSlamNode(LifecycleNode):
         self._kf_selector: KeyframeSelector | None = None
         self._window: SlidingWindow | None = None
         self._map: MapManager | None = None
+        self._scale_anchor: ScaleAnchor | None = None
         self._tf_broadcaster: TransformBroadcaster | None = None
         self._path_msg = Path()
 
@@ -103,6 +105,9 @@ class VGGTSlamNode(LifecycleNode):
             )
             self._map = MapManager(voxel_size=p['voxel_size'] or None)
             self._overlap = p['window_size'] - p['window_stride']
+            self._scale_anchor = ScaleAnchor(
+                min_overlap=max(self._overlap // 2, 4)
+            )
             self._conf_threshold_pct = p['conf_threshold_pct']
             self._map_frame = p['map_frame']
             self._camera_frame = p['camera_frame']
@@ -194,6 +199,8 @@ class VGGTSlamNode(LifecycleNode):
             self._window.reset()
         if self._map:
             self._map.reset()
+        if self._scale_anchor:
+            self._scale_anchor.reset()
         return TransitionCallbackReturn.SUCCESS
 
     # ==================================================================
@@ -276,17 +283,26 @@ class VGGTSlamNode(LifecycleNode):
             f"({len(frames)/dt:.1f} fps)"
         )
 
+        # Scale anchoring: align current window to global map frame
+        extrinsics_g, world_points_g = self._scale_anchor.process(
+            result['extrinsics'],
+            result['world_points'],
+            overlap=self._overlap,
+        )
+
         # Colors from input images
+        out_h, out_w = world_points_g.shape[1:3]
         colors = np.stack([
-            np.array(img, dtype=np.uint8) for img in images_rgb
+            cv2.resize(np.array(img, dtype=np.uint8), (out_w, out_h))
+            for img in images_rgb
         ])  # (S, H, W, 3)
 
         new_pts, new_cols = self._map.add_window_result(
             global_indices=global_indices,
             stamps=stamps,
-            extrinsics=result['extrinsics'],
+            extrinsics=extrinsics_g,
             intrinsics=result['intrinsics'],
-            world_points=result['world_points'],
+            world_points=world_points_g,
             colors=colors,
             conf=result['world_points_conf'],
             conf_threshold_pct=self._conf_threshold_pct,
@@ -295,7 +311,7 @@ class VGGTSlamNode(LifecycleNode):
 
         # Use the last frame's stamp and pose for TF / path publishing
         last_stamp_float = stamps[-1]
-        last_extrinsic = result['extrinsics'][-1]
+        last_extrinsic = extrinsics_g[-1]
         ros_stamp = self._float_to_stamp(last_stamp_float)
 
         self._publish_tf(last_extrinsic, ros_stamp)
