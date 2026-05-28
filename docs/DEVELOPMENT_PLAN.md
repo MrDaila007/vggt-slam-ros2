@@ -164,7 +164,7 @@ GTSAM factor graph with:
 Graph is optimised with Levenberg-Marquardt after each loop closure.
 All map points are then rigidly transformed to match the corrected poses.
 
-### 2.3 Integration into slam_node ⬜
+### 2.3 Integration into slam_node ✅
 
 After every window is processed:
 1. Query image retrieval for a loop candidate.
