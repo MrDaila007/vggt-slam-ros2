@@ -64,7 +64,8 @@ RUN pip3 install --no-cache-dir \
     einops \
     timm \
     transformers>=4.38.0 \
-    gtsam>=4.2
+    gtsam>=4.2 \
+    "pytest>=7" pytest-cov
 
 # ── VGGT ─────────────────────────────────────────────────────────────────────
 # pip install creates a broken UNKNOWN-0.0.0 wheel (pyproject.toml has no name).
@@ -83,6 +84,9 @@ RUN bash -c "source /opt/ros/humble/setup.bash && \
         --packages-select vggt_slam_ros2 \
         --cmake-args -DCMAKE_BUILD_TYPE=Release \
     && rm -rf build log"
+# install/ is kept so the workspace is already set up for the entrypoint.
+# The entrypoint will rebuild from mounted source on every container start,
+# so the baked-in install is just a warm base that avoids re-downloading deps.
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 COPY docker/entrypoint.sh /entrypoint.sh

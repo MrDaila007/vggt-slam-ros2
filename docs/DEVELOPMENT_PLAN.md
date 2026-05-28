@@ -263,10 +263,16 @@ Download the EuRoC MAV dataset (drone footage, stereo + IMU).
 Run evaluation on the `MH_01` and `V1_01` sequences.
 EuRoC is harder than TUM fr1 due to faster motion and greater blur.
 
-### 4.5 SaveMap service ⬜
+### 4.5 SaveMap service ✅
 
 Implement `srv/SaveMap.srv` (request: file path and format PCD/PLY, response:
 success flag). When called, serialise the full accumulated point cloud to disk.
+
+**Implementation:**
+- `srv/SaveMap.srv`: `{string path, string format}` → `{bool success, string message}`
+- Hybrid `ament_cmake` build with `rosidl_generate_interfaces` for interface generation
+- `slam_node.py` wires `~/save_map` service; gracefully skips if srv not yet built
+- `MapManager.save_to_file` does the actual serialisation (PCD/PLY/npz)
 Useful for offline processing and 3D printing workflows.
 
 ---
