@@ -1,0 +1,8 @@
+# Save the accumulated point cloud to disk.
+# path: absolute file path (extension is replaced by the chosen format)
+# format: "pcd", "ply", or "npz"  (default "npz" if open3d is not available)
+string path
+string format
+---
+bool success
+string message

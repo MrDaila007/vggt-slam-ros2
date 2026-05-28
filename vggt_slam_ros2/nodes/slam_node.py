@@ -19,7 +19,7 @@ Topics subscribed:
   /camera/camera_info            sensor_msgs/CameraInfo   (optional)
 
 Services:
-  /vggt_slam/save_map            (TODO: custom srv)
+  /vggt_slam/save_map            vggt_slam_ros2/srv/SaveMap
   /vggt_slam/reset               std_srvs/Empty
 """
 
@@ -42,6 +42,12 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from std_srvs.srv import Empty
 from tf2_ros import TransformBroadcaster
+
+try:
+    from vggt_slam_ros2.srv import SaveMap
+    _SAVEMAP_SRV_OK = True
+except ImportError:
+    _SAVEMAP_SRV_OK = False
 from visualization_msgs.msg import Marker
 
 try:
@@ -197,6 +203,15 @@ class VGGTSlamNode(LifecycleNode):
 
         # Services
         self._reset_srv = self.create_service(Empty, '~/reset', self._reset_callback)
+        if _SAVEMAP_SRV_OK:
+            self._save_map_srv = self.create_service(
+                SaveMap, '~/save_map', self._save_map_callback)
+        else:
+            self._save_map_srv = None
+            self.get_logger().warn(
+                "SaveMap service unavailable: vggt_slam_ros2.srv not found. "
+                "Rebuild with colcon to generate the interface."
+            )
 
         # TF
         self._tf_broadcaster = TransformBroadcaster(self)
@@ -229,6 +244,8 @@ class VGGTSlamNode(LifecycleNode):
         self.destroy_publisher(self._pose_pub)
         self.destroy_publisher(self._depth_pub)
         self.destroy_service(self._reset_srv)
+        if self._save_map_srv is not None:
+            self.destroy_service(self._save_map_srv)
         return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: State) -> TransitionCallbackReturn:
@@ -518,6 +535,25 @@ class VGGTSlamNode(LifecycleNode):
             self._lc_node_count = 0
         self._path_msg = Path()
         self._path_msg.header.frame_id = self._map_frame
+        return response
+
+    def _save_map_callback(self, request, response):
+        path = request.path or '/tmp/vggt_slam_map'
+        fmt = request.format or 'npz'
+        self.get_logger().info(f"Saving map to {path}.{fmt} ...")
+        try:
+            ok = self._map.save_to_file(path, fmt=fmt)
+        except Exception as e:
+            response.success = False
+            response.message = str(e)
+            self.get_logger().error(f"save_map failed: {e}")
+            return response
+        response.success = ok
+        response.message = (
+            f"Saved {self._map.total_points()} points to {path}.{fmt}"
+            if ok else "Map is empty — nothing saved."
+        )
+        self.get_logger().info(response.message)
         return response
 
     # ==================================================================
