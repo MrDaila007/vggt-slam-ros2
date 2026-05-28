@@ -62,7 +62,9 @@ RUN pip3 install --no-cache-dir \
     open3d>=0.17.0 \
     matplotlib \
     einops \
-    timm
+    timm \
+    transformers>=4.38.0 \
+    gtsam>=4.2
 
 # ── VGGT ─────────────────────────────────────────────────────────────────────
 # pip install creates a broken UNKNOWN-0.0.0 wheel (pyproject.toml has no name).
