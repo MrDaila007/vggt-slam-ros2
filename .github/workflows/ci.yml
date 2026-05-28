@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Style ──────────────────────────────────────────────────────────────────
+  flake8:
+    name: flake8 style check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install flake8
+      - run: |
+          flake8 vggt_slam_ros2/ scripts/ test/ \
+            --max-line-length=100 \
+            --extend-ignore=E203,W503 \
+            --exclude=__pycache__
+
+  # ── Types ──────────────────────────────────────────────────────────────────
+  mypy:
+    name: mypy type check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install mypy numpy
+      - run: |
+          mypy vggt_slam_ros2/core/ \
+            --ignore-missing-imports \
+            --strict-optional \
+            --no-error-summary
+
+  # ── Unit tests ─────────────────────────────────────────────────────────────
+  unit-tests:
+    name: unit tests (no GPU)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: |
+          pip install \
+            numpy \
+            opencv-python-headless \
+            Pillow \
+            pytest \
+            pytest-cov
+      - name: Run unit tests
+        run: |
+          python -m pytest test/ \
+            --ignore=test/test_ros_conversions.py \
+            -v \
+            --tb=short \
+            --cov=vggt_slam_ros2 \
+            --cov-report=term-missing \
+            --cov-fail-under=70
+
+  # ── ROS2 colcon build ──────────────────────────────────────────────────────
+  colcon-build:
+    name: colcon build (ROS2 Humble)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up ROS2 Humble
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      - name: Install Python deps (no VGGT/GPU)
+        run: |
+          pip3 install \
+            "numpy>=1.24.0,<2.0" \
+            Pillow>=10.0.0 \
+            opencv-python-headless>=4.8.0
+
+      - name: colcon build
+        run: |
+          source /opt/ros/humble/setup.bash
+          mkdir -p /tmp/colcon_ws/src
+          cp -r $GITHUB_WORKSPACE /tmp/colcon_ws/src/vggt_slam_ros2
+          cd /tmp/colcon_ws
+          colcon build \
+            --packages-select vggt_slam_ros2 \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Verify install
+        run: |
+          source /opt/ros/humble/setup.bash
+          source /tmp/colcon_ws/install/setup.bash
+          python3 -c "import vggt_slam_ros2; print('Import OK')"
+        shell: bash
