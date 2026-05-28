@@ -17,7 +17,7 @@ DINOv2 was chosen over NetVLAD because:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -73,8 +73,8 @@ class ImageRetrieval:
         self._threshold = similarity_threshold
         self._min_time_gap = min_time_gap
         self._device = device
-        self._model = None
-        self._processor = None
+        self._model: Any = None
+        self._processor: Any = None
 
         # Database
         self._embeddings: list[np.ndarray] = []   # list of (D,) float32

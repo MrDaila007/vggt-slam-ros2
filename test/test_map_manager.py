@@ -2,10 +2,9 @@
 
 import tempfile
 import numpy as np
-import pytest
 from pathlib import Path
 
-from vggt_slam_ros2.core.map_manager import MapManager, MapFrame
+from vggt_slam_ros2.core.map_manager import MapManager
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

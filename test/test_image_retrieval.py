@@ -1,7 +1,6 @@
 """Unit tests for core/image_retrieval.py (no GPU required)."""
 
 import numpy as np
-import pytest
 
 from vggt_slam_ros2.core.image_retrieval import ImageRetrieval, LoopCandidate
 

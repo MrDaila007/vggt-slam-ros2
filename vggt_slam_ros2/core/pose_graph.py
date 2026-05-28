@@ -21,7 +21,6 @@ GTSAM is an optional dependency; an ImportError is raised only when
 from __future__ import annotations
 
 import numpy as np
-from typing import Optional
 
 _GTSAM_AVAILABLE = False
 try:
@@ -104,9 +103,9 @@ class PoseGraph:
     """
 
     # Noise models (sigmas in [rad, rad, rad, m, m, m])
-    _ODOM_SIGMAS    = np.array([0.01, 0.01, 0.01, 0.05, 0.05, 0.05])
-    _PRIOR_SIGMAS   = np.array([1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6])
-    _LOOP_SIGMAS    = np.array([0.05, 0.05, 0.05, 0.10, 0.10, 0.10])
+    _ODOM_SIGMAS = np.array([0.01, 0.01, 0.01, 0.05, 0.05, 0.05])
+    _PRIOR_SIGMAS = np.array([1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6])
+    _LOOP_SIGMAS = np.array([0.05, 0.05, 0.05, 0.10, 0.10, 0.10])
 
     def __init__(self) -> None:
         self._check_gtsam()

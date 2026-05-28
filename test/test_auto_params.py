@@ -1,7 +1,5 @@
 """Unit tests for utils/auto_params.py (no GPU required)."""
 
-import pytest
-
 from vggt_slam_ros2.utils.auto_params import (
     WindowParams,
     select_window_params,

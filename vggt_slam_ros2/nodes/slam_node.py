@@ -48,7 +48,6 @@ try:
     _SAVEMAP_SRV_OK = True
 except ImportError:
     _SAVEMAP_SRV_OK = False
-from visualization_msgs.msg import Marker
 
 try:
     from cv_bridge import CvBridge
@@ -115,7 +114,7 @@ class VGGTSlamNode(LifecycleNode):
                 budget = p['auto_tune_budget_gb'] or None
                 auto = select_window_params(memory_budget_gb=budget)
                 print_params(auto)
-                p['window_size']   = auto.window_size
+                p['window_size'] = auto.window_size
                 p['window_stride'] = auto.stride
                 self.get_logger().info(
                     f"Auto-tuned: window_size={auto.window_size}, "

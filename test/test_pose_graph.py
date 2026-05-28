@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from vggt_slam_ros2.core.pose_graph import (
     extrinsic_to_world,
@@ -116,6 +116,7 @@ def mock_gtsam_module():
 
     # Values
     values = MagicMock()
+
     def _at_pose3(key):
         # Return an identity-ish pose
         p = MagicMock()
@@ -184,8 +185,6 @@ class TestAddPose:
         pg, pg_mod = pose_graph
         pg.add_pose(np.eye(4))
         assert pg._graph.add.call_count == 1
-        args = pg._graph.add.call_args[0]
-        # Should be a PriorFactorPose3
         assert pg_mod.gtsam.PriorFactorPose3.called
 
     def test_second_pose_adds_between(self, pose_graph):

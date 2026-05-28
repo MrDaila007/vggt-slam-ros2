@@ -14,7 +14,7 @@ Design notes:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import numpy as np
 from typing import Optional
 
@@ -144,7 +144,7 @@ class MapManager:
         """
         from pathlib import Path as _Path
 
-        pts  = self.get_all_points()
+        pts = self.get_all_points()
         cols = self.get_all_colors()
 
         if pts.shape[0] == 0:
@@ -173,10 +173,10 @@ class MapManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _voxel_downsample(
+    def _voxel_downsample_impl(
         pts: np.ndarray, cols: np.ndarray, voxel_size: float = 0.05
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Simple voxel grid filter — uses Open3D if available, else numpy."""
+        """Voxel grid filter — uses Open3D if available, else passthrough."""
         try:
             import open3d as o3d
             pcd = o3d.geometry.PointCloud()
@@ -189,6 +189,7 @@ class MapManager:
         except ImportError:
             return pts, cols
 
-    # make voxel_size available to the static method
-    def _voxel_downsample(self, pts, cols):  # type: ignore[override]
-        return MapManager._voxel_downsample(pts, cols, self.voxel_size or 0.05)
+    def _voxel_downsample(
+        self, pts: np.ndarray, cols: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        return MapManager._voxel_downsample_impl(pts, cols, self.voxel_size or 0.05)

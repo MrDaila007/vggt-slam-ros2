@@ -1,7 +1,6 @@
 """Unit tests for core/scale_anchor.py."""
 
 import numpy as np
-import pytest
 
 from vggt_slam_ros2.core.scale_anchor import (
     ScaleAnchor,
@@ -214,7 +213,7 @@ class TestScaleAnchor:
         # First window: no prior reference, but pass the future overlap so
         # ScaleAnchor stores the right number of frames for the next window.
         ext1_out, _ = sa.process(ext1, pts1, overlap=overlap)
-        pos1_out = _cam_positions(ext1_out)
+        _cam_positions(ext1_out)
 
         # Window 2: the same physical cameras but seen by VGGT in its own frame.
         # The overlap frames (last `overlap` of window 1 = first `overlap` of window 2)

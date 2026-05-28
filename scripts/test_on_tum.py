@@ -38,7 +38,6 @@ Outputs (in --out_dir)
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from pathlib import Path
@@ -53,12 +52,12 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _PKG_ROOT = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_PKG_ROOT))
 
-from vggt_slam_ros2.core.vggt_wrapper import VGGTWrapper
-from vggt_slam_ros2.core.keyframe_selector import KeyframeSelector
-from vggt_slam_ros2.core.sliding_window import SlidingWindow, Keyframe
-from vggt_slam_ros2.core.scale_anchor import ScaleAnchor
-from vggt_slam_ros2.core.image_retrieval import ImageRetrieval
-from vggt_slam_ros2.core.pose_graph import (
+from vggt_slam_ros2.core.vggt_wrapper import VGGTWrapper  # noqa: E402
+from vggt_slam_ros2.core.keyframe_selector import KeyframeSelector  # noqa: E402
+from vggt_slam_ros2.core.sliding_window import SlidingWindow, Keyframe  # noqa: E402
+from vggt_slam_ros2.core.scale_anchor import ScaleAnchor  # noqa: E402
+from vggt_slam_ros2.core.image_retrieval import ImageRetrieval  # noqa: E402
+from vggt_slam_ros2.core.pose_graph import (  # noqa: E402
     PoseGraph, extrinsic_to_world, world_to_extrinsic, relative_pose,
 )
 
@@ -400,7 +399,6 @@ def align_sim3(
 
     R = U @ S @ Vt
     scale = float((d * S.diagonal()).sum() / sigma_e)
-    t = mu_r - scale * R @ mu_e
 
     est_aligned = scale * (R @ est_c.T).T + mu_r
     return est_aligned, scale, R
@@ -544,9 +542,9 @@ def plot_trajectory(
 
 def _quat_trans_to_se3(qx, qy, qz, qw, tx, ty, tz) -> np.ndarray:
     R = np.array([
-        [1 - 2*(qy**2 + qz**2),     2*(qx*qy - qz*qw),     2*(qx*qz + qy*qw)],
-        [    2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2),     2*(qy*qz - qx*qw)],
-        [    2*(qx*qz - qy*qw),     2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
+        [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
+        [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
+        [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
     ], dtype=np.float64)
     T = np.eye(4, dtype=np.float64)
     T[:3, :3] = R
@@ -684,10 +682,10 @@ def main() -> None:
         ]
 
         N_cur = min(len(est_trans_m), len(ref_trans_cur))
-        est_trans_m  = est_trans_m[:N_cur]
+        est_trans_m = est_trans_m[:N_cur]
         ref_trans_cur = ref_trans_cur[:N_cur]
         ref_poses_cur = ref_poses_cur[:N_cur]
-        est_poses_m  = est_poses_m[:N_cur]
+        est_poses_m = est_poses_m[:N_cur]
 
         print("\nAligning trajectory (Sim3) ...")
         est_aligned_cur, scale_cur, _ = align_sim3(est_trans_m, ref_trans_cur)

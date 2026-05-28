@@ -1,0 +1,5 @@
+[run]
+omit =
+    vggt_slam_ros2/core/vggt_wrapper.py
+    vggt_slam_ros2/nodes/*
+    vggt_slam_ros2/utils/ros_conversions.py

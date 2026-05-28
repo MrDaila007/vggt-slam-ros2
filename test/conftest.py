@@ -35,7 +35,7 @@ def dummy_extrinsic():
 def dummy_intrinsic():
     """Typical 640×480 pinhole intrinsic matrix."""
     return np.array([
-        [500.0,   0.0, 320.0],
-        [  0.0, 500.0, 240.0],
-        [  0.0,   0.0,   1.0],
+        [500.0, 0.0, 320.0],
+        [0.0, 500.0, 240.0],
+        [0.0, 0.0, 1.0],
     ], dtype=np.float64)

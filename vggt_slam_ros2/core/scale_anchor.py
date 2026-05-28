@@ -62,12 +62,12 @@ class ScaleAnchor:
 
         # Align overlap region: first `overlap` frames of the current window
         # correspond to the last `overlap` frames of the previous window.
-        curr_overlap = cam_pos[:overlap]                  # (overlap, 3)
-        ref_overlap  = self._prev_overlap_global          # (overlap, 3)
+        curr_overlap = cam_pos[:overlap]  # (overlap, 3)
+        ref_overlap = self._prev_overlap_global  # (overlap, 3)
 
         scale, R_sim3, t_sim3 = _umeyama(curr_overlap, ref_overlap)
 
-        extrinsics_global   = _apply_sim3_extrinsics(extrinsics,   scale, R_sim3, t_sim3)
+        extrinsics_global = _apply_sim3_extrinsics(extrinsics, scale, R_sim3, t_sim3)
         world_points_global = _apply_sim3_points(world_points, scale, R_sim3, t_sim3)
 
         corrected_pos = _cam_positions(extrinsics_global)
@@ -177,7 +177,7 @@ def _apply_sim3_extrinsics(
 
     result = np.empty_like(extrinsics)
     result[:, :3, :3] = R_new
-    result[:, :3, 3]  = t_new
+    result[:, :3, 3] = t_new
     return result
 
 
