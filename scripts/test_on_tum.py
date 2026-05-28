@@ -51,6 +51,7 @@ sys.path.insert(0, str(_PKG_ROOT))
 from vggt_slam_ros2.core.vggt_wrapper import VGGTWrapper
 from vggt_slam_ros2.core.keyframe_selector import KeyframeSelector
 from vggt_slam_ros2.core.sliding_window import SlidingWindow, Keyframe
+from vggt_slam_ros2.core.scale_anchor import ScaleAnchor
 
 
 # ===========================================================================
@@ -162,9 +163,11 @@ class TUMPipelineRunner:
 
         self._conf_thr = args.conf_thr
         self._overlap = args.window_size - args.window_stride
+        self._use_scale_anchor = not getattr(args, 'no_scale_anchor', False)
+        self._scale_anchor = ScaleAnchor(min_overlap=max(self._overlap // 2, 4))
 
         # Results accumulated across windows:
-        # list of (timestamp, (3,4) extrinsic cam-from-world)
+        # list of (timestamp, (3,4) extrinsic cam-from-world, in global frame)
         self._estimated: list[tuple[float, np.ndarray]] = []
         self._all_points: list[np.ndarray] = []
         self._all_colors: list[np.ndarray] = []
@@ -212,20 +215,31 @@ class TUMPipelineRunner:
         self._window_count += 1
 
         S = result['extrinsics'].shape[0]
-        out_h, out_w = result['world_points'].shape[1:3]  # VGGT output spatial size (e.g. 518×518)
+        out_h, out_w = result['world_points'].shape[1:3]
         colors_arr = np.stack([
             cv2.resize(np.array(img, dtype=np.uint8), (out_w, out_h))
             for img in images
         ])
 
+        # Scale anchoring: align current window to global frame via overlap frames.
+        if self._use_scale_anchor:
+            extrinsics_g, world_points_g = self._scale_anchor.process(
+                result['extrinsics'],
+                result['world_points'],
+                overlap=self._overlap,
+            )
+        else:
+            extrinsics_g = result['extrinsics']
+            world_points_g = result['world_points']
+
         new_start = self._overlap if self._window_count > 1 else 0
 
         for i in range(new_start, S):
-            ext = result['extrinsics'][i]      # (3,4) cam-from-world
+            ext = extrinsics_g[i]
             self._estimated.append((stamps[i], ext))
 
             # Collect coloured points for optional visualisation
-            pts = result['world_points'][i].reshape(-1, 3)
+            pts = world_points_g[i].reshape(-1, 3)
             col = colors_arr[i].reshape(-1, 3)
             conf = result['world_points_conf'][i].reshape(-1)
             thr = np.percentile(conf, self._conf_thr)
@@ -499,8 +513,10 @@ def parse_args() -> argparse.Namespace:
                    help='Cap number of dataset frames (0=all)')
     p.add_argument('--gt_max_diff',    type=float, default=0.02,
                    help='Max timestamp difference (s) for GT association')
-    p.add_argument('--no_plot',        action='store_true',
+    p.add_argument('--no_plot',          action='store_true',
                    help='Skip matplotlib visualisation')
+    p.add_argument('--no_scale_anchor', action='store_true',
+                   help='Disable inter-window Sim(3) scale anchoring')
     return p.parse_args()
 
 

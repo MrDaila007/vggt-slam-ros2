@@ -70,3 +70,28 @@ logs-humble:
 .PHONY: logs-jazzy
 logs-jazzy:
 	docker compose --profile jazzy logs -f
+
+# ── TUM RGB-D evaluation (Stage 1.11) ─────────────────────────────────────
+# Usage:
+#   make eval-tum DATASET=/path/to/rgbd_dataset_freiburg1_desk
+#   make eval-tum DATASET=data/rgbd_dataset_freiburg1_desk MAX_FRAMES=200
+TUM_DATASET ?= data/rgbd_dataset_freiburg1_desk
+MAX_FRAMES  ?= 0
+
+.PHONY: eval-tum
+eval-tum:
+	docker run --rm \
+	  --runtime nvidia \
+	  --network host \
+	  -e NVIDIA_VISIBLE_DEVICES=all \
+	  -v hf_cache:/root/.cache/huggingface \
+	  -v $(PWD)/data:/ros2_ws/data:ro \
+	  -v $(PWD)/results:/ros2_ws/results:rw \
+	  -v $(PWD):/ros2_ws/src/vggt_slam_ros2:ro \
+	  -e PYTHONPATH=/opt/vggt:/ros2_ws/src/vggt_slam_ros2 \
+	  --workdir /ros2_ws/src/vggt_slam_ros2 \
+	  $(HUMBLE_IMAGE) \
+	  python3 scripts/test_on_tum.py \
+	    --dataset /ros2_ws/$(TUM_DATASET) \
+	    --out_dir /ros2_ws/results \
+	    --max_frames $(MAX_FRAMES)
