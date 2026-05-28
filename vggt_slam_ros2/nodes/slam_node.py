@@ -57,6 +57,7 @@ from vggt_slam_ros2.core.map_manager import MapManager
 from vggt_slam_ros2.core.scale_anchor import ScaleAnchor
 from vggt_slam_ros2.core.image_retrieval import ImageRetrieval
 from vggt_slam_ros2.core.pose_graph import PoseGraph, extrinsic_to_world, relative_pose
+from vggt_slam_ros2.utils.auto_params import select_window_params, print_params
 from vggt_slam_ros2.utils.ros_conversions import (
     numpy_to_pointcloud2,
     extrinsic_to_transform,
@@ -102,6 +103,19 @@ class VGGTSlamNode(LifecycleNode):
         self.get_logger().info("Configuring VGGT SLAM node...")
         try:
             p = self._get_params()
+
+            # Stage 4.3: auto-tune window parameters from GPU memory
+            if p['auto_tune_params']:
+                budget = p['auto_tune_budget_gb'] or None
+                auto = select_window_params(memory_budget_gb=budget)
+                print_params(auto)
+                p['window_size']   = auto.window_size
+                p['window_stride'] = auto.stride
+                self.get_logger().info(
+                    f"Auto-tuned: window_size={auto.window_size}, "
+                    f"stride={auto.stride} "
+                    f"(est. peak {auto.estimated_peak_gb:.1f} GB)"
+                )
 
             self._kf_selector = KeyframeSelector(
                 min_flow=p['min_flow'],
@@ -528,6 +542,9 @@ class VGGTSlamNode(LifecycleNode):
         self.declare_parameter('enable_loop_closure', False)
         self.declare_parameter('lc_similarity_threshold', 0.85)
         self.declare_parameter('lc_min_time_gap', 10.0)
+        # Stage 4 — automatic parameter tuning
+        self.declare_parameter('auto_tune_params', False)
+        self.declare_parameter('auto_tune_budget_gb', 0.0)  # 0 = auto-detect
 
     def _get_params(self) -> dict:
         return {
@@ -547,6 +564,8 @@ class VGGTSlamNode(LifecycleNode):
             'enable_loop_closure': self.get_parameter('enable_loop_closure').value,
             'lc_similarity_threshold': self.get_parameter('lc_similarity_threshold').value,
             'lc_min_time_gap':     self.get_parameter('lc_min_time_gap').value,
+            'auto_tune_params':    self.get_parameter('auto_tune_params').value,
+            'auto_tune_budget_gb': self.get_parameter('auto_tune_budget_gb').value,
         }
 
     @staticmethod
