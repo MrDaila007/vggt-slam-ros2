@@ -39,10 +39,12 @@ class VGGTWrapper:
             )
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.dtype = torch.bfloat16 if (
-            use_bf16 and torch.cuda.is_available()
-            and torch.cuda.get_device_capability()[0] >= 8
-        ) else torch.float16
+        if torch.cuda.is_available():
+            self.dtype = torch.bfloat16 if (
+                use_bf16 and torch.cuda.get_device_capability()[0] >= 8
+            ) else torch.float16
+        else:
+            self.dtype = torch.float32  # half precision not supported on CPU
 
         self.model = VGGT.from_pretrained(checkpoint)
         self.model.eval()
@@ -84,9 +86,9 @@ class VGGTWrapper:
         # otherwise fall back to a simple resize + normalise.
         try:
             tensor = load_and_preprocess_images(pil_images)  # (S, 3, H, W) float
-        except TypeError:
-            # load_and_preprocess_images may only accept file paths in some versions;
-            # do manual preprocessing in that case.
+        except (TypeError, AttributeError):
+            # load_and_preprocess_images only accepts file paths, not PIL images;
+            # fall back to manual preprocessing.
             tensors = []
             target_size = (518, 518)
             for img in pil_images:

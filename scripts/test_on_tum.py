@@ -212,7 +212,11 @@ class TUMPipelineRunner:
         self._window_count += 1
 
         S = result['extrinsics'].shape[0]
-        colors_arr = np.stack([np.array(img, dtype=np.uint8) for img in images])
+        out_h, out_w = result['world_points'].shape[1:3]  # VGGT output spatial size (e.g. 518×518)
+        colors_arr = np.stack([
+            cv2.resize(np.array(img, dtype=np.uint8), (out_w, out_h))
+            for img in images
+        ])
 
         new_start = self._overlap if self._window_count > 1 else 0
 

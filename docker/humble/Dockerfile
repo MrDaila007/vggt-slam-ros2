@@ -55,18 +55,22 @@ RUN pip3 install --no-cache-dir \
 
 # ── Python dependencies ───────────────────────────────────────────────────────
 RUN pip3 install --no-cache-dir \
-    numpy>=1.24.0 \
+    "numpy>=1.24.0,<2.0" \
     Pillow>=10.0.0 \
     opencv-python-headless>=4.8.0 \
     huggingface_hub>=0.20.0 \
-    open3d>=0.17.0
+    open3d>=0.17.0 \
+    matplotlib \
+    einops \
+    timm
 
 # ── VGGT ─────────────────────────────────────────────────────────────────────
-# Pin to a specific commit for reproducible builds.
-# Override with: --build-arg VGGT_REF=<commit-or-tag>
+# pip install creates a broken UNKNOWN-0.0.0 wheel (pyproject.toml has no name).
+# Clone the repo and add it to PYTHONPATH instead.
 ARG VGGT_REF=main
-RUN pip3 install --no-cache-dir \
-    "git+https://github.com/facebookresearch/vggt.git@${VGGT_REF}"
+RUN git clone https://github.com/facebookresearch/vggt.git /opt/vggt && \
+    git -C /opt/vggt checkout ${VGGT_REF}
+ENV PYTHONPATH="/opt/vggt:${PYTHONPATH}"
 
 # ── Copy and build our package ───────────────────────────────────────────────
 WORKDIR /ros2_ws
