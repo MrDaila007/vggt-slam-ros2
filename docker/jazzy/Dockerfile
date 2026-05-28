@@ -9,7 +9,7 @@
 #   - nvidia-container-toolkit installed and configured
 #   - NVIDIA driver >= 570 (CUDA 12.8, supports Blackwell sm_120)
 
-FROM nvidia/cuda:12.8.1-cudnn9-devel-ubuntu24.04
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
