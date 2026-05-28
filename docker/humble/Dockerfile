@@ -1,5 +1,5 @@
 # ============================================================
-# vggt-slam-ros2 — ROS2 Humble (Ubuntu 22.04 + CUDA 12.1)
+# vggt-slam-ros2 — ROS2 Humble (Ubuntu 22.04 + CUDA 12.8)
 # ============================================================
 #
 # Build:
@@ -7,9 +7,9 @@
 #
 # Requirements on the host:
 #   - nvidia-container-toolkit installed and configured
-#   - NVIDIA driver >= 525 (CUDA 12.1 compatible)
+#   - NVIDIA driver >= 570 (CUDA 12.8, supports Blackwell sm_120)
 
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+FROM nvidia/cuda:12.8.1-cudnn9-devel-ubuntu22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
@@ -48,10 +48,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV ROS_DISTRO=humble
 
-# ── PyTorch (CUDA 12.1) ───────────────────────────────────────────────────────
+# ── PyTorch (CUDA 12.8 — Blackwell sm_120 support requires PyTorch 2.7+) ───────
 RUN pip3 install --no-cache-dir \
-    torch==2.2.2 torchvision==0.17.2 \
-    --index-url https://download.pytorch.org/whl/cu121
+    torch==2.7.0 torchvision==0.22.0 \
+    --index-url https://download.pytorch.org/whl/cu128
 
 # ── Python dependencies ───────────────────────────────────────────────────────
 RUN pip3 install --no-cache-dir \

@@ -1,5 +1,5 @@
 # ============================================================
-# vggt-slam-ros2 — ROS2 Jazzy (Ubuntu 24.04 + CUDA 12.4)
+# vggt-slam-ros2 — ROS2 Jazzy (Ubuntu 24.04 + CUDA 12.8)
 # ============================================================
 #
 # Build:
@@ -7,9 +7,9 @@
 #
 # Requirements on the host:
 #   - nvidia-container-toolkit installed and configured
-#   - NVIDIA driver >= 550 (CUDA 12.4 compatible)
+#   - NVIDIA driver >= 570 (CUDA 12.8, supports Blackwell sm_120)
 
-FROM nvidia/cuda:12.4.1-cudnn9-devel-ubuntu24.04
+FROM nvidia/cuda:12.8.1-cudnn9-devel-ubuntu24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
@@ -51,8 +51,8 @@ ENV ROS_DISTRO=jazzy
 # ── PyTorch (CUDA 12.4) ───────────────────────────────────────────────────────
 # Ubuntu 24.04 ships Python 3.12 — use --break-system-packages for global install
 RUN pip3 install --no-cache-dir --break-system-packages \
-    torch==2.3.1 torchvision==0.18.1 \
-    --index-url https://download.pytorch.org/whl/cu124
+    torch==2.7.0 torchvision==0.22.0 \
+    --index-url https://download.pytorch.org/whl/cu128
 
 # ── Python dependencies ───────────────────────────────────────────────────────
 RUN pip3 install --no-cache-dir --break-system-packages \
