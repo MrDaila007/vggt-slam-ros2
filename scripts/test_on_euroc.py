@@ -55,17 +55,9 @@ _PKG_ROOT = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_PKG_ROOT))
 sys.path.insert(0, str(_SCRIPT_DIR))
 
-# Re-use all pipeline + eval helpers from test_on_tum
-from test_on_tum import (  # noqa: E402
-    TUMPipelineRunner,
-    align_sim3,
-    compute_ate,
-    compute_rpe,
-    save_tum_trajectory,
-    save_metrics,
-    plot_trajectory,
-    associate_timestamps,
-)
+# Pipeline + eval helpers from test_on_tum are imported lazily inside main()
+# so that this module's loader functions (no GPU deps) can be imported in tests
+# without requiring torch/VGGT to be installed on the host.
 
 
 # ===========================================================================
@@ -180,6 +172,18 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    # Lazy import: keeps module importable without torch on the host.
+    from test_on_tum import (  # noqa: E402
+        TUMPipelineRunner,
+        align_sim3,
+        compute_ate,
+        compute_rpe,
+        save_tum_trajectory,
+        save_metrics,
+        plot_trajectory,
+        associate_timestamps,
+    )
+
     args = parse_args()
 
     dataset_dir = Path(args.dataset).expanduser().resolve()
