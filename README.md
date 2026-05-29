@@ -1,8 +1,7 @@
 # vggt_slam_ros2
 
 [![CI](https://github.com/MrDaila007/vggt-slam-ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/MrDaila007/vggt-slam-ros2/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-135%20passed-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-84%25%20core-blue)
+[![codecov](https://codecov.io/gh/MrDaila007/vggt-slam-ros2/branch/main/graph/badge.svg)](https://codecov.io/gh/MrDaila007/vggt-slam-ros2)
 
 A ROS2 Visual SLAM package that uses [VGGT](https://github.com/facebookresearch/vggt)
 (Visual Geometry Grounded Transformer, CVPR 2025 Best Paper) as a dense visual
@@ -275,13 +274,25 @@ Hardware: NVIDIA GPU, ~1.9 s/window average.
 
 ### Summary
 
-| Sequence | Dataset | Frames | Poses | No-LC ATE | With-LC ATE | Δ ATE | Loops |
-|---|---|---|---|---|---|---|---|
-| freiburg1_desk | TUM RGB-D | 200 | 103 | **0.125 m** | — | baseline | — |
-| freiburg1_360 | TUM RGB-D | 759 | 184 | 0.126 m | **0.123 m** | −2.6% | 1 |
-| freiburg1_room | TUM RGB-D | 1362 | 280 | 0.696 m | **0.681 m** | −2.2% | 15 |
-| V1_01_easy | EuRoC MAV | 2912 | 184 | 1.502 m | **1.099 m** | −26.8% | 13 |
-| MH_01_easy | EuRoC MAV | 3683 | 230 | 2.325 m | **0.784 m** | **−66.3%** | 49 |
+`✅` = loop closure improves ATE · `⚠️` = loop closure degrades (false revisits)
+
+| Sequence | No-LC ATE | With-LC ATE | Δ ATE | Loops | Note |
+|---|---|---|---|---|---|
+| freiburg1_desk | **0.125 m** | — | baseline | — | |
+| freiburg1_xyz | 0.054 m | **0.051 m** | −6.4% ✅ | 10 | pure translation |
+| freiburg1_rpy | **0.041 m** | 0.043 m | +5.2% | 5 | pure rotation, best no-LC |
+| freiburg1_360 | 0.126 m | **0.123 m** | −2.6% ✅ | 1 | 360° loop |
+| freiburg1_plant | 0.318 m | **0.213 m** | −33.0% ✅ | 4 | object-centric |
+| freiburg1_room | 0.696 m | **0.681 m** | −2.2% ✅ | 15 | room loop |
+| freiburg1_floor | 0.291 m | 0.465 m | +60.0% ⚠️ | 4 | repetitive floor texture |
+| freiburg1_teddy | 0.220 m | 0.332 m | +51.0% ⚠️ | 2 | object-centric, similar views |
+| V1_01_easy | 1.502 m | **1.099 m** | −26.8% ✅ | 13 | EuRoC Vicon room |
+| MH_01_easy | 2.325 m | **0.784 m** | **−66.3% ✅** | 49 | EuRoC machine hall |
+
+Loop closure with `dedup` strategy improves ATE on sequences with genuine
+place revisits. It degrades on `floor` and `teddy` where visual similarity
+is caused by repetitive textures rather than actual revisits — the similarity
+threshold (0.85) is too low for those scenes.
 
 ### TUM RGB-D — detailed
 
@@ -300,6 +311,26 @@ Hardware: NVIDIA GPU, ~1.9 s/window average.
 | Sim3 scale | 0.245 |
 | Avg window time | 2.05 s/window |
 
+#### freiburg1_xyz
+
+| Metric | No-LC | With-LC |
+|---|---|---|
+| ATE RMSE | 0.054 m | **0.051 m** |
+| ATE Mean | 0.044 m | 0.043 m |
+| ATE Max | 0.140 m | 0.138 m |
+| RPE RMSE | 0.096 m | 0.095 m |
+| Sim3 scale | 1.480 | 1.436 |
+
+#### freiburg1_rpy
+
+| Metric | No-LC | With-LC |
+|---|---|---|
+| ATE RMSE | **0.041 m** | 0.043 m |
+| ATE Mean | 0.036 m | 0.039 m |
+| ATE Max | 0.097 m | 0.104 m |
+| RPE RMSE | 0.040 m | 0.040 m |
+| Sim3 scale | 1.074 | 0.634 |
+
 #### freiburg1_360
 
 | Metric | No-LC | With-LC |
@@ -311,6 +342,16 @@ Hardware: NVIDIA GPU, ~1.9 s/window average.
 | RPE RMSE | 0.054 m | 0.054 m |
 | Sim3 scale | 0.781 | 0.829 |
 
+#### freiburg1_plant
+
+| Metric | No-LC | With-LC |
+|---|---|---|
+| ATE RMSE | 0.318 m | **0.213 m** |
+| ATE Mean | 0.246 m | 0.188 m |
+| ATE Max | 0.889 m | 0.515 m |
+| RPE RMSE | 0.176 m | 0.173 m |
+| Sim3 scale | 2.018 | 2.313 |
+
 #### freiburg1_room
 
 | Metric | No-LC | With-LC |
@@ -321,6 +362,26 @@ Hardware: NVIDIA GPU, ~1.9 s/window average.
 | ATE Max | 1.323 m | 1.510 m |
 | RPE RMSE | 0.075 m | 0.078 m |
 | Sim3 scale | 0.993 | 1.463 |
+
+#### freiburg1_floor ⚠️
+
+| Metric | No-LC | With-LC |
+|---|---|---|
+| ATE RMSE | **0.291 m** | 0.465 m |
+| ATE Mean | 0.245 m | 0.413 m |
+| ATE Max | 0.652 m | 0.962 m |
+| RPE RMSE | 0.150 m | 0.155 m |
+| Sim3 scale | 2.160 | 1.149 |
+
+#### freiburg1_teddy ⚠️
+
+| Metric | No-LC | With-LC |
+|---|---|---|
+| ATE RMSE | **0.220 m** | 0.332 m |
+| ATE Mean | 0.183 m | 0.298 m |
+| ATE Max | 0.634 m | 0.654 m |
+| RPE RMSE | 0.130 m | 0.130 m |
+| Sim3 scale | 2.459 | 2.387 |
 
 ### EuRoC MAV — detailed
 
@@ -367,7 +428,7 @@ Three strategies selectable via `--lc_strategy`:
 
 ## Tests
 
-Unit tests run without a GPU or a ROS2 runtime. All 135 tests pass in ~1 s.
+Unit tests run without a GPU or a ROS2 runtime. All 150 tests pass in ~1 s.
 
 ```bash
 # Inside the Docker container
@@ -378,7 +439,7 @@ python3 -m pytest test/ --ignore=test/test_ros_conversions.py -v \
 ### Results (Python 3.10, pytest 9.0.3, Docker — ROS2 Humble)
 
 ```
-======================== 135 passed, 1 warning in 1.09s ========================
+======================== 150 passed, 1 warning in 0.85s ========================
 ```
 
 | Test file | Tests | Status |
@@ -389,10 +450,11 @@ python3 -m pytest test/ --ignore=test/test_ros_conversions.py -v \
 | `test_image_retrieval.py` | 10 | ✅ pass |
 | `test_keyframe_selector.py` | 10 | ✅ pass |
 | `test_map_manager.py` | 14 | ✅ pass |
+| `test_occupancy_grid.py` | 15 | ✅ pass |
 | `test_pose_graph.py` | 12 | ✅ pass |
 | `test_scale_anchor.py` | 12 | ✅ pass |
 | `test_sliding_window.py` | 13 | ✅ pass |
-| **Total** | **135** | **✅ all pass** |
+| **Total** | **150** | **✅ all pass** |
 
 ### Coverage
 
@@ -411,7 +473,7 @@ python3 -m pytest test/ --ignore=test/test_ros_conversions.py -v \
 | `nodes/pointcloud_node.py` | 0% | requires ROS2 runtime |
 | `utils/ros_conversions.py` | 0% | requires ROS2 runtime |
 
-Core modules (excludes GPU/ROS2 runtime): **~84% coverage**.
+Core modules (excludes GPU/ROS2 runtime): **~84% coverage**. CI enforces `--cov-fail-under=80`. Live coverage tracked by [Codecov](https://codecov.io/gh/MrDaila007/vggt-slam-ros2).
 
 ---
 

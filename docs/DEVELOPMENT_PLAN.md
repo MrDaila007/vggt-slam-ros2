@@ -188,13 +188,22 @@ After every window is processed:
 Test on `freiburg1_room` (explicit loop) and `freiburg1_360` (360° rotation).
 Report ATE RMSE before and after loop closure to quantify the improvement.
 
-**Results:**
+**Results (all 8 TUM fr1 sequences, `--lc_strategy dedup`):**
 
-| Sequence | Frames | No-LC ATE | With-LC ATE | Improvement | Strategy |
-|----------|--------|-----------|-------------|-------------|----------|
-| freiburg1_desk | 200 | 0.125 m | — | baseline | — |
-| freiburg1_room | 1362 | 0.696 m | 0.681 m | +2.2% | dedup (15 loops) |
-| freiburg1_360 | 759 | 0.126 m | 0.123 m | +2.6% | dedup (1 loop) |
+| Sequence | No-LC ATE | With-LC ATE | Δ | Loops |
+|---|---|---|---|---|
+| freiburg1_desk | 0.125 m | — | baseline | — |
+| freiburg1_xyz | 0.054 m | **0.051 m** | −6.4% ✅ | 10 |
+| freiburg1_rpy | **0.041 m** | 0.043 m | +5.2% | 5 |
+| freiburg1_360 | 0.126 m | **0.123 m** | −2.6% ✅ | 1 |
+| freiburg1_plant | 0.318 m | **0.213 m** | −33.0% ✅ | 4 |
+| freiburg1_room | 0.696 m | **0.681 m** | −2.2% ✅ | 15 |
+| freiburg1_floor | 0.291 m | 0.465 m | +60.0% ⚠️ | 4 |
+| freiburg1_teddy | 0.220 m | 0.332 m | +51.0% ⚠️ | 2 |
+
+`floor` and `teddy` degrade because repetitive texture fools DINOv2 into
+detecting false revisits. Raising `lc_similarity_threshold` above 0.90
+eliminates the false loops on those sequences.
 
 Three selectable loop closure strategies available via `--lc_strategy`:
 - `rotation` — VGGT rotation + odometry translation (scale-safe, default)
