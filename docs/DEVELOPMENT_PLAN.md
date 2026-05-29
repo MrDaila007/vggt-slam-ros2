@@ -280,18 +280,17 @@ Script: `scripts/test_on_euroc.py` — reuses the full TUM pipeline with a
 dedicated EuRoC loader (nanosecond timestamps, greyscale→RGB conversion,
 `state_groundtruth_estimate0/data.csv` GT parser).
 
-**Results — V1_01_easy (2912 frames, 184 keyframe poses):**
+**Results (dedup loop closure strategy):**
 
-| Metric | No-LC | With-LC (dedup, 13 loops) |
-|--------|-------|--------------------------|
-| ATE RMSE | 1.502 m | **1.099 m** (+26.8%) |
-| ATE Median | 1.187 m | 0.852 m |
-| RPE RMSE | 0.427 m | 0.428 m |
-| Sim3 scale | 1.622 | 3.324 |
+| Sequence | Frames | Poses | No-LC ATE | With-LC ATE | Improvement | Loops |
+|----------|--------|-------|-----------|-------------|-------------|-------|
+| V1_01_easy | 2912 | 184 | 1.502 m | **1.099 m** | +26.8% | 13 (from 40) |
+| MH_01_easy | 3683 | 230 | 2.325 m | **0.784 m** | **+66.3%** | 49 (from 157) |
 
-EuRoC ATE is ~10× higher than TUM fr1 due to fast drone motion and
-motion blur. VGGT is optimised for slow indoor camera motion. Loop closure
-gives a meaningful +26.8% ATE improvement even on this harder sequence.
+EuRoC ATE is ~10× higher than TUM fr1 due to fast drone motion and motion
+blur — VGGT is optimised for slow indoor camera motion. Loop closure gives
+strong correction on MH_01_easy (+66.3%) where the machine hall forms a
+clear 360° loop, and meaningful improvement on V1_01_easy (+26.8%).
 
 ### 4.5 SaveMap service ✅
 
