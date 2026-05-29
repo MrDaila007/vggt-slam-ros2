@@ -63,6 +63,7 @@ jobs:
             -v \
             --tb=short \
             --cov=vggt_slam_ros2 \
+            --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80

@@ -1,5 +1,11 @@
 [run]
 omit =
-    vggt_slam_ros2/core/vggt_wrapper.py
-    vggt_slam_ros2/nodes/*
-    vggt_slam_ros2/utils/ros_conversions.py
+    */core/vggt_wrapper.py
+    */nodes/*
+    */utils/ros_conversions.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError
