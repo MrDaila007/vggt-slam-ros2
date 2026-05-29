@@ -183,10 +183,23 @@ After every window is processed:
 3. Add loop factor to pose graph and re-optimise.
 4. Republish corrected full point cloud and path.
 
-### 2.4 Evaluation ⬜
+### 2.4 Evaluation ✅
 
 Test on `freiburg1_room` (explicit loop) and `freiburg1_360` (360° rotation).
 Report ATE RMSE before and after loop closure to quantify the improvement.
+
+**Results:**
+
+| Sequence | Frames | No-LC ATE | With-LC ATE | Improvement | Strategy |
+|----------|--------|-----------|-------------|-------------|----------|
+| freiburg1_desk | 200 | 0.125 m | — | baseline | — |
+| freiburg1_room | 1362 | 0.696 m | 0.681 m | +2.2% | dedup (15 loops) |
+| freiburg1_360 | 759 | 0.126 m | 0.123 m | +2.6% | dedup (1 loop) |
+
+Three selectable loop closure strategies available via `--lc_strategy`:
+- `rotation` — VGGT rotation + odometry translation (scale-safe, default)
+- `normalize` — VGGT rotation + VGGT translation rescaled to odometry magnitude
+- `dedup` — deduplicate candidates to ≤1 per ±5-frame region + full VGGT T_rel
 
 ---
 
@@ -262,6 +275,10 @@ chosen parameters so the user can reproduce the setting manually.
 Download the EuRoC MAV dataset (drone footage, stereo + IMU).
 Run evaluation on the `MH_01` and `V1_01` sequences.
 EuRoC is harder than TUM fr1 due to faster motion and greater blur.
+
+Script: `scripts/test_on_euroc.py` — reuses the full TUM pipeline with a
+dedicated EuRoC loader (nanosecond timestamps, greyscale→RGB conversion,
+`state_groundtruth_estimate0/data.csv` GT parser).
 
 ### 4.5 SaveMap service ✅
 
