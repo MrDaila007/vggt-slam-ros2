@@ -30,6 +30,8 @@ x-slam-base: &slam-base
     - /tmp/.X11-unix:/tmp/.X11-unix:rw
     # HuggingFace model cache — avoids re-downloading VGGT-1B on every start
     - hf_cache:/root/.cache/huggingface
+    # colcon build cache — incremental rebuilds instead of full clean each start
+    - colcon_build_cache:/ros2_ws/build
     # ── Project folders mounted from the host ──────────────────────────────
     # Source code: edit on the host, container rebuilds on next start
     - ./:/ros2_ws/src/vggt_slam_ros2:ro
@@ -87,3 +89,5 @@ services:
 volumes:
   # Named volume so the ~2-4 GB VGGT model is downloaded only once
   hf_cache:
+  # colcon incremental build cache (CMake + rosidl artifacts)
+  colcon_build_cache:
