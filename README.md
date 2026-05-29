@@ -1,8 +1,7 @@
 # vggt_slam_ros2
 
 [![CI](https://github.com/MrDaila007/vggt-slam-ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/MrDaila007/vggt-slam-ros2/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-135%20passed-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-84%25%20core-blue)
+[![codecov](https://codecov.io/gh/MrDaila007/vggt-slam-ros2/branch/main/graph/badge.svg)](https://codecov.io/gh/MrDaila007/vggt-slam-ros2)
 
 A ROS2 Visual SLAM package that uses [VGGT](https://github.com/facebookresearch/vggt)
 (Visual Geometry Grounded Transformer, CVPR 2025 Best Paper) as a dense visual
@@ -367,7 +366,7 @@ Three strategies selectable via `--lc_strategy`:
 
 ## Tests
 
-Unit tests run without a GPU or a ROS2 runtime. All 135 tests pass in ~1 s.
+Unit tests run without a GPU or a ROS2 runtime. All 150 tests pass in ~1 s.
 
 ```bash
 # Inside the Docker container
@@ -378,7 +377,7 @@ python3 -m pytest test/ --ignore=test/test_ros_conversions.py -v \
 ### Results (Python 3.10, pytest 9.0.3, Docker — ROS2 Humble)
 
 ```
-======================== 135 passed, 1 warning in 1.09s ========================
+======================== 150 passed, 1 warning in 0.85s ========================
 ```
 
 | Test file | Tests | Status |
@@ -389,10 +388,11 @@ python3 -m pytest test/ --ignore=test/test_ros_conversions.py -v \
 | `test_image_retrieval.py` | 10 | ✅ pass |
 | `test_keyframe_selector.py` | 10 | ✅ pass |
 | `test_map_manager.py` | 14 | ✅ pass |
+| `test_occupancy_grid.py` | 15 | ✅ pass |
 | `test_pose_graph.py` | 12 | ✅ pass |
 | `test_scale_anchor.py` | 12 | ✅ pass |
 | `test_sliding_window.py` | 13 | ✅ pass |
-| **Total** | **135** | **✅ all pass** |
+| **Total** | **150** | **✅ all pass** |
 
 ### Coverage
 
@@ -411,7 +411,7 @@ python3 -m pytest test/ --ignore=test/test_ros_conversions.py -v \
 | `nodes/pointcloud_node.py` | 0% | requires ROS2 runtime |
 | `utils/ros_conversions.py` | 0% | requires ROS2 runtime |
 
-Core modules (excludes GPU/ROS2 runtime): **~84% coverage**.
+Core modules (excludes GPU/ROS2 runtime): **~84% coverage**. CI enforces `--cov-fail-under=80`. Live coverage tracked by [Codecov](https://codecov.io/gh/MrDaila007/vggt-slam-ros2).
 
 ---
 
