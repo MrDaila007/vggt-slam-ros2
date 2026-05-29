@@ -268,43 +268,94 @@ Timestamps are nanoseconds — association is done with a 20 ms tolerance.
 
 ## Benchmark Results
 
-All runs use `window_size=16`, `stride=8`, `--lc_strategy dedup` (loop closure).
-Trajectory error is ATE RMSE after Sim(3) alignment (Umeyama 1991).
-Hardware: NVIDIA GPU, ~1.9 s per window.
+All runs: `window_size=16`, `stride=8`, loop closure strategy `dedup`.
+ATE = Absolute Trajectory Error after Sim(3) alignment (Umeyama 1991).
+RPE = Relative Pose Error, delta=1 keyframe.
+Hardware: NVIDIA GPU, ~1.9 s/window average.
 
-### TUM RGB-D (indoor, handheld RGB-D camera)
+### Summary
 
-| Sequence | Frames | Keyframe poses | No-LC ATE | With-LC ATE | Improvement |
-|---|---|---|---|---|---|
-| freiburg1_desk | 200 | 103 | **0.125 m** | — | baseline |
-| freiburg1_360 | 759 | 184 | 0.126 m | **0.123 m** | +2.6% |
-| freiburg1_room | 1362 | 280 | 0.696 m | **0.681 m** | +2.2% |
+| Sequence | Dataset | Frames | Poses | No-LC ATE | With-LC ATE | Δ ATE | Loops |
+|---|---|---|---|---|---|---|---|
+| freiburg1_desk | TUM RGB-D | 200 | 103 | **0.125 m** | — | baseline | — |
+| freiburg1_360 | TUM RGB-D | 759 | 184 | 0.126 m | **0.123 m** | −2.6% | 1 |
+| freiburg1_room | TUM RGB-D | 1362 | 280 | 0.696 m | **0.681 m** | −2.2% | 15 |
+| V1_01_easy | EuRoC MAV | 2912 | 184 | 1.502 m | **1.099 m** | −26.8% | 13 |
+| MH_01_easy | EuRoC MAV | 3683 | 230 | 2.325 m | **0.784 m** | **−66.3%** | 49 |
 
-freiburg1_desk baseline detail:
+### TUM RGB-D — detailed
+
+#### freiburg1_desk (baseline, no loop closure)
 
 | Metric | Value |
 |---|---|
-| ATE RMSE | 0.125 m |
+| ATE RMSE | **0.125 m** |
 | ATE Mean | 0.112 m |
+| ATE Median | 0.117 m |
+| ATE Std | 0.056 m |
+| ATE Max | 0.231 m |
 | RPE RMSE | 0.783 m |
+| RPE Mean | 0.363 m |
+| RPE Max | 3.071 m |
 | Sim3 scale | 0.245 |
 | Avg window time | 2.05 s/window |
 
-### EuRoC MAV (drone, fast motion, greyscale)
+#### freiburg1_360
 
-| Sequence | Frames | Keyframe poses | No-LC ATE | With-LC ATE | Improvement | Loops applied |
-|---|---|---|---|---|---|---|
-| V1_01_easy | 2912 | 184 | 1.502 m | **1.099 m** | +26.8% | 13 (from 40 detected) |
-| MH_01_easy | 3683 | 230 | 2.325 m | **0.784 m** | **+66.3%** | 49 (from 157 detected) |
+| Metric | No-LC | With-LC |
+|---|---|---|
+| ATE RMSE | 0.126 m | **0.123 m** |
+| ATE Mean | 0.118 m | 0.111 m |
+| ATE Median | 0.108 m | 0.103 m |
+| ATE Max | 0.269 m | 0.286 m |
+| RPE RMSE | 0.054 m | 0.054 m |
+| Sim3 scale | 0.781 | 0.829 |
 
-EuRoC ATE is higher than TUM because VGGT is optimised for slow indoor motion;
-EuRoC drone footage has fast translation and motion blur. Loop closure gives a
-strong correction on MH_01_easy (+66.3%) where the machine hall forms a clear
-360° revisit.
+#### freiburg1_room
+
+| Metric | No-LC | With-LC |
+|---|---|---|
+| ATE RMSE | 0.696 m | **0.681 m** |
+| ATE Mean | 0.644 m | 0.594 m |
+| ATE Median | 0.653 m | 0.444 m |
+| ATE Max | 1.323 m | 1.510 m |
+| RPE RMSE | 0.075 m | 0.078 m |
+| Sim3 scale | 0.993 | 1.463 |
+
+### EuRoC MAV — detailed
+
+EuRoC ATE is ~10× higher than TUM fr1: drone footage has fast translational
+motion and motion blur. VGGT is optimised for slow indoor camera motion.
+Loop closure gives strong correction where the sequence contains a clear 360°
+revisit (MH_01_easy machine hall: −66.3%).
+
+#### V1_01_easy (Vicon room, 2912 frames)
+
+| Metric | No-LC | With-LC (13 loops from 40 detected) |
+|---|---|---|
+| ATE RMSE | 1.502 m | **1.099 m** |
+| ATE Mean | 1.363 m | 0.938 m |
+| ATE Median | 1.187 m | 0.852 m |
+| ATE Std | 0.630 m | 0.573 m |
+| ATE Max | 3.279 m | 3.266 m |
+| RPE RMSE | 0.427 m | 0.428 m |
+| Sim3 scale | 1.622 | 3.324 |
+
+#### MH_01_easy (Machine hall, 3683 frames)
+
+| Metric | No-LC | With-LC (49 loops from 157 detected) |
+|---|---|---|
+| ATE RMSE | 2.325 m | **0.784 m** |
+| ATE Mean | 1.699 m | 0.685 m |
+| ATE Median | 0.986 m | 0.613 m |
+| ATE Std | 1.588 m | 0.380 m |
+| ATE Max | 7.998 m | 2.783 m |
+| RPE RMSE | 0.326 m | 0.329 m |
+| Sim3 scale | 1.796 | 5.332 |
 
 ### Loop closure strategies
 
-Three strategies are selectable via `--lc_strategy`:
+Three strategies selectable via `--lc_strategy`:
 
 | Strategy | Description | Best for |
 |---|---|---|
