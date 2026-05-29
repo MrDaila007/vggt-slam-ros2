@@ -70,30 +70,32 @@ jobs:
   colcon-build:
     name: colcon build (ROS2 Humble)
     runs-on: ubuntu-22.04
+    # ROS2 Humble pre-installed — avoids ~2-3 min apt install via setup-ros
+    container:
+      image: ros:humble-ros-base-jammy
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up ROS2 Humble
-        uses: ros-tooling/setup-ros@v0.7
+      # Cache CMake + rosidl build artifacts; key covers all files that affect
+      # the generated output (srv interfaces, CMakeLists.txt, package manifests).
+      # On cache hit, colcon skips codegen and runs in ~5 s instead of ~60 s.
+      - name: Cache colcon build artifacts
+        uses: actions/cache@v4
         with:
-          required-ros-distributions: humble
-
-      - name: Install Python deps (no VGGT/GPU)
-        run: |
-          pip3 install \
-            "numpy>=1.24.0,<2.0" \
-            Pillow>=10.0.0 \
-            opencv-python-headless>=4.8.0
+          path: /tmp/colcon_ws/build
+          key: colcon-humble-${{ hashFiles('CMakeLists.txt', 'package.xml', 'setup.py', 'setup.cfg', 'srv/**') }}
+          restore-keys: colcon-humble-
 
       - name: colcon build
         run: |
           source /opt/ros/humble/setup.bash
           mkdir -p /tmp/colcon_ws/src
-          cp -r $GITHUB_WORKSPACE /tmp/colcon_ws/src/vggt_slam_ros2
+          ln -sfn "$GITHUB_WORKSPACE" /tmp/colcon_ws/src/vggt_slam_ros2
           cd /tmp/colcon_ws
           colcon build \
             --packages-select vggt_slam_ros2 \
-            --cmake-args -DCMAKE_BUILD_TYPE=Release
+            --cmake-args -DCMAKE_BUILD_TYPE=Release \
+            --symlink-install
         shell: bash
 
       - name: Verify install
