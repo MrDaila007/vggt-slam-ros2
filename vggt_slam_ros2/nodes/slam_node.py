@@ -10,6 +10,7 @@ Topics published:
   /vggt_slam/path                nav_msgs/Path            — camera trajectory
   /vggt_slam/pose                geometry_msgs/PoseStamped
   /vggt_slam/depth               sensor_msgs/Image        — latest VGGT depth map
+  /vggt_slam/map                 nav_msgs/OccupancyGrid   — 2-D Nav2-compatible map
 
 TF broadcasts:
   map → camera_frame  (configurable names)
@@ -39,7 +40,8 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 from sensor_msgs.msg import Image, CameraInfo, PointCloud2
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Path
+from nav_msgs.msg import Path, OccupancyGrid, MapMetaData
+from std_msgs.msg import Header
 from std_srvs.srv import Empty
 from tf2_ros import TransformBroadcaster
 
@@ -63,6 +65,7 @@ from vggt_slam_ros2.core.scale_anchor import ScaleAnchor
 from vggt_slam_ros2.core.image_retrieval import ImageRetrieval
 from vggt_slam_ros2.core.pose_graph import PoseGraph, extrinsic_to_world, relative_pose
 from vggt_slam_ros2.utils.auto_params import select_window_params, print_params
+from vggt_slam_ros2.utils.occupancy_grid import build_occupancy_grid
 from vggt_slam_ros2.utils.ros_conversions import (
     numpy_to_pointcloud2,
     extrinsic_to_transform,
@@ -143,6 +146,11 @@ class VGGTSlamNode(LifecycleNode):
             self._publish_full_map = p['publish_full_map']
             self._full_map_period = p['full_map_period']
             self._last_full_map_pub = 0.0
+            self._publish_occ_grid = p['publish_occ_grid']
+            self._occ_grid_resolution = p['occ_grid_resolution']
+            self._occ_grid_z_min = p['occ_grid_z_min']
+            self._occ_grid_z_max = p['occ_grid_z_max']
+            self._occ_grid_min_points = p['occ_grid_min_points']
 
             # Load model (can be slow — done here so activation is fast)
             self.get_logger().info(f"Loading VGGT from {p['checkpoint']} ...")
@@ -199,6 +207,7 @@ class VGGTSlamNode(LifecycleNode):
         self._path_pub = self.create_publisher(Path, '~/path', qos_latched)
         self._pose_pub = self.create_publisher(PoseStamped, '~/pose', 10)
         self._depth_pub = self.create_publisher(Image, '~/depth', 10)
+        self._occ_grid_pub = self.create_publisher(OccupancyGrid, '~/map', qos_latched)
 
         # Services
         self._reset_srv = self.create_service(Empty, '~/reset', self._reset_callback)
@@ -242,6 +251,7 @@ class VGGTSlamNode(LifecycleNode):
         self.destroy_publisher(self._path_pub)
         self.destroy_publisher(self._pose_pub)
         self.destroy_publisher(self._depth_pub)
+        self.destroy_publisher(self._occ_grid_pub)
         self.destroy_service(self._reset_srv)
         if self._save_map_srv is not None:
             self.destroy_service(self._save_map_srv)
@@ -377,10 +387,12 @@ class VGGTSlamNode(LifecycleNode):
             pc_msg = numpy_to_pointcloud2(new_pts, new_cols, self._map_frame, ros_stamp)
             self._pc_pub.publish(pc_msg)
 
-        # Optionally publish full map at reduced frequency
+        # Optionally publish full map + occupancy grid at reduced frequency
         now = time.monotonic()
         if self._publish_full_map and (now - self._last_full_map_pub) >= self._full_map_period:
             self._publish_full_pointcloud(ros_stamp)
+            if self._publish_occ_grid:
+                self._publish_occupancy_grid(ros_stamp)
             self._last_full_map_pub = now
 
         # Depth image of the last frame
@@ -506,6 +518,37 @@ class VGGTSlamNode(LifecycleNode):
             pc_msg = numpy_to_pointcloud2(pts, cols, self._map_frame, stamp)
             self._pc_full_pub.publish(pc_msg)
 
+    def _publish_occupancy_grid(self, stamp) -> None:
+        pts = self._map.get_all_points()
+        grid_data = build_occupancy_grid(
+            pts,
+            resolution=self._occ_grid_resolution,
+            z_min=self._occ_grid_z_min,
+            z_max=self._occ_grid_z_max,
+            min_points=self._occ_grid_min_points,
+        )
+        if grid_data is None:
+            return
+
+        msg = OccupancyGrid()
+        msg.header = Header()
+        msg.header.stamp = stamp
+        msg.header.frame_id = self._map_frame
+
+        msg.info = MapMetaData()
+        msg.info.resolution = grid_data.resolution
+        msg.info.width = grid_data.width
+        msg.info.height = grid_data.height
+        msg.info.map_load_time = stamp
+
+        from geometry_msgs.msg import Pose, Point, Quaternion
+        msg.info.origin = Pose(
+            position=Point(x=grid_data.origin_x, y=grid_data.origin_y, z=0.0),
+            orientation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0),
+        )
+        msg.data = grid_data.data.flatten().tolist()
+        self._occ_grid_pub.publish(msg)
+
     def _publish_depth(self, depth: np.ndarray, stamp) -> None:
         """Publish depth map as a 32FC1 ROS2 image."""
         if self._bridge is None:
@@ -577,7 +620,14 @@ class VGGTSlamNode(LifecycleNode):
         self.declare_parameter('enable_loop_closure', False)
         self.declare_parameter('lc_similarity_threshold', 0.85)
         self.declare_parameter('lc_min_time_gap', 10.0)
-        # Stage 4 — automatic parameter tuning
+        # Stage 4.2 — Nav2 occupancy grid
+        self.declare_parameter('publish_occ_grid', True)
+        self.declare_parameter('occ_grid_resolution', 0.05)   # metres/cell
+        self.declare_parameter('occ_grid_z_min', 0.1)         # metres above origin
+        self.declare_parameter('occ_grid_z_max', 2.0)
+        self.declare_parameter('occ_grid_min_points', 2)      # hits to mark occupied
+
+        # Stage 4.3 — automatic parameter tuning
         self.declare_parameter('auto_tune_params', False)
         self.declare_parameter('auto_tune_budget_gb', 0.0)  # 0 = auto-detect
 
@@ -599,6 +649,11 @@ class VGGTSlamNode(LifecycleNode):
             'enable_loop_closure': self.get_parameter('enable_loop_closure').value,
             'lc_similarity_threshold': self.get_parameter('lc_similarity_threshold').value,
             'lc_min_time_gap':     self.get_parameter('lc_min_time_gap').value,
+            'publish_occ_grid':    self.get_parameter('publish_occ_grid').value,
+            'occ_grid_resolution': self.get_parameter('occ_grid_resolution').value,
+            'occ_grid_z_min':      self.get_parameter('occ_grid_z_min').value,
+            'occ_grid_z_max':      self.get_parameter('occ_grid_z_max').value,
+            'occ_grid_min_points': self.get_parameter('occ_grid_min_points').value,
             'auto_tune_params':    self.get_parameter('auto_tune_params').value,
             'auto_tune_budget_gb': self.get_parameter('auto_tune_budget_gb').value,
         }

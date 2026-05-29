@@ -258,17 +258,32 @@ Subscribe to a second camera topic (`image_raw_right`). Use the known baseline
 between the two cameras to recover metric scale directly — eliminating the
 Sim(3) ambiguity that requires scale anchoring in the monocular case.
 
-### 4.2 Nav2 integration ⬜
+### 4.2 Nav2 integration ✅
 
-Periodically project the accumulated point cloud into a 2D occupancy grid
-(`nav_msgs/OccupancyGrid`). Publish on `~/map` so Nav2's costmap can consume
-it directly, enabling autonomous navigation without a separate mapping layer.
+Project the accumulated point cloud into a 2-D `nav_msgs/OccupancyGrid`
+published on `~/map` so Nav2's `costmap_2d` can consume it directly.
 
-### 4.3 Automatic parameter tuning ⬜
+**Implementation (`utils/occupancy_grid.py`):**
+- Pure-numpy, no ROS2 dependency — fully unit-testable
+- Height-band filter [z_min, z_max] to isolate obstacle points
+- Cell resolution, min-points threshold configurable via `params.yaml`
+- Published at the same rate as `~/pointcloud_full` (configurable period)
+- RViz2 Map display added to `config/vggt_slam.rviz`
+
+Parameters: `publish_occ_grid`, `occ_grid_resolution` (default 0.05 m),
+`occ_grid_z_min` (0.1 m), `occ_grid_z_max` (2.0 m), `occ_grid_min_points` (2).
+
+### 4.3 Automatic parameter tuning ✅
 
 At startup, query `torch.cuda.mem_get_info()` and select `window_size` /
 `stride` to keep GPU memory usage below a configurable budget. Print the
 chosen parameters so the user can reproduce the setting manually.
+
+**Implementation (`utils/auto_params.py`):**
+- `select_window_params(memory_budget_gb)` — empirical memory model for VGGT-1B
+- `_detect_free_memory_gb()` — reads `torch.cuda.mem_get_info()`, fallback 8 GB
+- Integrated in `slam_node.py` via `auto_tune_params` / `auto_tune_budget_gb` params
+- 10 unit tests, all passing
 
 ### 4.4 EuRoC evaluation ✅
 
