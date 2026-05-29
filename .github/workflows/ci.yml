@@ -111,5 +111,6 @@ jobs:
         run: |
           source /opt/ros/humble/setup.bash
           source /tmp/colcon_ws/install/setup.bash
-          python3 -c "import vggt_slam_ros2; print('Import OK')"
+          python3 -c "import vggt_slam_ros2.nodes.slam_node; print('Import OK')"
+          test -x /tmp/colcon_ws/install/vggt_slam_ros2/lib/vggt_slam_ros2/slam_node
         shell: bash

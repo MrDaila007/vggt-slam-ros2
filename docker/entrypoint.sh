@@ -19,6 +19,7 @@ _needs_rebuild() {
            -o -name "package.xml" \
            -o -name "setup.py" \
            -o -name "setup.cfg" \
+           -o -path "${SRC}/scripts/*" \
            -o -name "*.srv" \
            -o -name "*.msg" \
            -o -name "*.action" \

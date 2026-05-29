@@ -8,6 +8,7 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 # --------------------------------------------------------------------------- #
 # Custom interface generation
@@ -24,9 +25,18 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 # package name — that would create duplicate CMake targets.
 # Instead, install the node Python sources directly into site-packages.
 # --------------------------------------------------------------------------- #
+# Install Python modules next to rosidl-generated srv bindings.
+# rosidl owns vggt_slam_ros2/__init__.py under local/lib/pythonX.Y/dist-packages/;
+# installing core/nodes/utils elsewhere makes `import vggt_slam_ros2.nodes` fail.
+set(_PY_PKG_DIR
+  "local/lib/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/dist-packages/${PROJECT_NAME}"
+)
 install(
-  DIRECTORY vggt_slam_ros2/
-  DESTINATION lib/python3/dist-packages/vggt_slam_ros2/
+  DIRECTORY
+    vggt_slam_ros2/core
+    vggt_slam_ros2/nodes
+    vggt_slam_ros2/utils
+  DESTINATION ${_PY_PKG_DIR}
 )
 
 # Install launch, config, and srv directories
@@ -35,11 +45,11 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Install node entry-point scripts (makes `ros2 run` work)
+# Install node entry-point wrappers (ros2 run / launch expect names without .py)
 install(
   PROGRAMS
-    vggt_slam_ros2/nodes/slam_node.py
-    vggt_slam_ros2/nodes/pointcloud_node.py
+    scripts/slam_node
+    scripts/pointcloud_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
