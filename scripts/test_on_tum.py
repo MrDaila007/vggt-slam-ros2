@@ -25,6 +25,10 @@ Optional arguments
   --loop_closure            enable DINOv2 loop detection + GTSAM optimisation
   --lc_threshold  0.85      cosine similarity threshold for loop detection
   --lc_min_gap    5.0       minimum time gap (s) between matched loop frames
+  --lc_strategy   rotation  loop closure strategy:
+                              rotation  — VGGT R + odometry t (scale-safe)
+                              normalize — VGGT R + VGGT t rescaled to odom magnitude
+                              dedup     — deduplicate candidates + full VGGT T_rel
 
 Outputs (in --out_dir)
 ----------------------
@@ -315,33 +319,94 @@ class TUMPipelineRunner:
 
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _dedup_loop_candidates(
+        candidates: list[tuple[int, int]],
+        region: int = 5,
+    ) -> list[tuple[int, int]]:
+        """Keep at most one loop per (match_region, query_region) cell."""
+        seen: list[tuple[int, int]] = []
+        deduped: list[tuple[int, int]] = []
+        for m, q in candidates:
+            if any(abs(m - sm) <= region and abs(q - sq) <= region
+                   for sm, sq in seen):
+                continue
+            seen.append((m, q))
+            deduped.append((m, q))
+        return deduped
+
     def apply_loop_closure(self) -> bool:
         """
         Build GTSAM pose graph, add loop factors, optimize, apply corrections.
+
+        Strategy (--lc_strategy):
+          rotation  — VGGT rotation + odometry translation (preserves scale).
+          normalize — VGGT rotation + VGGT translation rescaled to odometry
+                      magnitude (scale-safe full constraint).
+          dedup     — deduplicate candidates to ≤1 per ±5-frame region,
+                      then use full VGGT T_rel (best ATE potential).
+
         Returns True if any loops were applied.
         """
         if not self._loop_candidates:
             print("No loop candidates detected — skipping pose graph optimization.")
             return False
 
-        print(f"\nApplying loop closure: {len(self._loop_candidates)} loop(s) detected.")
+        strategy = getattr(self.args, 'lc_strategy', 'rotation')
+        candidates = self._loop_candidates
+        if strategy == 'dedup':
+            candidates = self._dedup_loop_candidates(candidates)
+            print(
+                f"\nApplying loop closure [{strategy}]: "
+                f"{len(self._loop_candidates)} detected → "
+                f"{len(candidates)} after dedup."
+            )
+        else:
+            print(
+                f"\nApplying loop closure [{strategy}]: "
+                f"{len(candidates)} loop(s) detected."
+            )
+
         pg = PoseGraph()
         for _, ext in self._estimated:
             pg.add_pose(extrinsic_to_world(ext))
 
         applied = 0
-        for match_idx, query_idx in self._loop_candidates:
+        for match_idx, query_idx in candidates:
             if (match_idx >= len(self._frame_images)
                     or query_idx >= len(self._frame_images)):
                 print(f"  Skip {match_idx} ↔ {query_idx}: index out of range")
                 continue
+
             pair_result = self._vggt.infer(
                 [self._frame_images[match_idx], self._frame_images[query_idx]]
             )
-            T_match = extrinsic_to_world(pair_result['extrinsics'][0])
-            T_query = extrinsic_to_world(pair_result['extrinsics'][1])
-            T_rel = relative_pose(T_match, T_query)
-            pg.add_loop(match_idx, query_idx, T_rel)
+            T_match_vggt = extrinsic_to_world(pair_result['extrinsics'][0])
+            T_query_vggt = extrinsic_to_world(pair_result['extrinsics'][1])
+            T_rel_vggt = relative_pose(T_match_vggt, T_query_vggt)
+
+            T_match_g = extrinsic_to_world(self._estimated[match_idx][1])
+            T_query_g = extrinsic_to_world(self._estimated[query_idx][1])
+            T_rel_global = relative_pose(T_match_g, T_query_g)
+
+            if strategy == 'rotation':
+                # VGGT rotation + odometry translation — preserves scale.
+                T_rel_factor = T_rel_global.copy()
+                T_rel_factor[:3, :3] = T_rel_vggt[:3, :3]
+            elif strategy == 'normalize':
+                # VGGT rotation + VGGT translation direction rescaled to the
+                # odometry magnitude — scale-safe, full directional constraint.
+                T_rel_factor = T_rel_vggt.copy()
+                t_vggt_len = float(np.linalg.norm(T_rel_vggt[:3, 3]))
+                t_global_len = float(np.linalg.norm(T_rel_global[:3, 3]))
+                if t_vggt_len > 1e-6:
+                    T_rel_factor[:3, 3] *= t_global_len / t_vggt_len
+                else:
+                    T_rel_factor[:3, 3] = T_rel_global[:3, 3]
+            else:  # dedup — full VGGT T_rel, scale accepted as-is
+                T_rel_factor = T_rel_vggt
+
+            pg.add_loop(match_idx, query_idx, T_rel_factor)
             applied += 1
             print(f"  Loop factor added: {match_idx} ↔ {query_idx}")
 
@@ -618,6 +683,14 @@ def parse_args() -> argparse.Namespace:
                    help='Cosine similarity threshold for loop detection')
     p.add_argument('--lc_min_gap',      type=float, default=5.0,
                    help='Minimum time gap (s) between matched loop frames')
+    p.add_argument('--lc_strategy',     default='rotation',
+                   choices=['rotation', 'normalize', 'dedup'],
+                   help=(
+                       'Loop closure strategy: '
+                       'rotation=VGGT-R + odom-t (scale-safe, rotation-only fix); '
+                       'normalize=VGGT-R + VGGT-t rescaled to odom magnitude; '
+                       'dedup=deduplicate candidates then full VGGT T_rel'
+                   ))
     return p.parse_args()
 
 
