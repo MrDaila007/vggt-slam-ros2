@@ -475,6 +475,13 @@ python3 -m pytest test/ --ignore=test/test_ros_conversions.py -v \
 
 Core modules (excludes GPU/ROS2 runtime): **~84% coverage**. CI enforces `--cov-fail-under=80`. Live coverage tracked by [Codecov](https://codecov.io/gh/MrDaila007/vggt-slam-ros2).
 
+**Codecov badge setup (one-time):** `main` is protected, so uploads require a token.
+
+1. Sign in at [codecov.io](https://codecov.io) with GitHub and enable this repo.
+2. Copy the repo upload token from the Codecov project settings.
+3. Add a GitHub Actions secret named `CODECOV_TOKEN` (Settings → Secrets and variables → Actions).
+4. Re-run CI on `main`; the badge should show the reported percentage after the first successful upload.
+
 ---
 
 ## License
