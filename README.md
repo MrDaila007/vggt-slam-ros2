@@ -1,5 +1,7 @@
 # vggt_slam_ros2
 
+[![CI](https://github.com/MrDaila007/vggt-slam-ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/MrDaila007/vggt-slam-ros2/actions/workflows/ci.yml)
+
 A ROS2 Visual SLAM package that uses [VGGT](https://github.com/facebookresearch/vggt)
 (Visual Geometry Grounded Transformer, CVPR 2025 Best Paper) as a dense visual
 front-end for real-time 3D map building from a monocular camera stream.
@@ -241,6 +243,72 @@ python scripts/test_on_tum.py --dataset rgbd_dataset_freiburg1_desk
 ```
 
 See [docs/get_tum_dataset.md](docs/get_tum_dataset.md) for all sequences.
+
+---
+
+## Evaluation on EuRoC MAV
+
+```bash
+# Download MH_01_easy (machine hall, 3683 frames)
+# See ETH Research Collection: https://www.research-collection.ethz.ch
+
+# Run inside the Docker container
+python scripts/test_on_euroc.py \
+  --dataset /data/MH_01_easy \
+  --loop_closure \
+  --lc_strategy dedup
+```
+
+EuRoC images are greyscale (cam0); the script converts to RGB automatically.
+Timestamps are nanoseconds — association is done with a 20 ms tolerance.
+
+---
+
+## Benchmark Results
+
+All runs use `window_size=16`, `stride=8`, `--lc_strategy dedup` (loop closure).
+Trajectory error is ATE RMSE after Sim(3) alignment (Umeyama 1991).
+Hardware: NVIDIA GPU, ~1.9 s per window.
+
+### TUM RGB-D (indoor, handheld RGB-D camera)
+
+| Sequence | Frames | Keyframe poses | No-LC ATE | With-LC ATE | Improvement |
+|---|---|---|---|---|---|
+| freiburg1_desk | 200 | 103 | **0.125 m** | — | baseline |
+| freiburg1_360 | 759 | 184 | 0.126 m | **0.123 m** | +2.6% |
+| freiburg1_room | 1362 | 280 | 0.696 m | **0.681 m** | +2.2% |
+
+freiburg1_desk baseline detail:
+
+| Metric | Value |
+|---|---|
+| ATE RMSE | 0.125 m |
+| ATE Mean | 0.112 m |
+| RPE RMSE | 0.783 m |
+| Sim3 scale | 0.245 |
+| Avg window time | 2.05 s/window |
+
+### EuRoC MAV (drone, fast motion, greyscale)
+
+| Sequence | Frames | Keyframe poses | No-LC ATE | With-LC ATE | Improvement | Loops applied |
+|---|---|---|---|---|---|---|
+| V1_01_easy | 2912 | 184 | 1.502 m | **1.099 m** | +26.8% | 13 (from 40 detected) |
+| MH_01_easy | 3683 | 230 | 2.325 m | **0.784 m** | **+66.3%** | 49 (from 157 detected) |
+
+EuRoC ATE is higher than TUM because VGGT is optimised for slow indoor motion;
+EuRoC drone footage has fast translation and motion blur. Loop closure gives a
+strong correction on MH_01_easy (+66.3%) where the machine hall forms a clear
+360° revisit.
+
+### Loop closure strategies
+
+Three strategies are selectable via `--lc_strategy`:
+
+| Strategy | Description | Best for |
+|---|---|---|
+| `rotation` | VGGT rotation + odometry translation | Scale-sensitive trajectories |
+| `normalize` | VGGT rotation + VGGT translation rescaled to odometry magnitude | Balanced |
+| `dedup` *(default)* | Deduplicate candidates to ≤1 per ±5-frame region, full VGGT T_rel | Long sequences with clear loops |
 
 ---
 
