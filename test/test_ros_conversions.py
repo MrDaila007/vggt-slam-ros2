@@ -11,7 +11,7 @@ import pytest
 # Skip the entire module if ROS2 message types are unavailable.
 # This allows running `pytest test/` in a non-ROS2 environment.
 geometry_msgs = pytest.importorskip("geometry_msgs")
-sensor_msgs   = pytest.importorskip("sensor_msgs")
+sensor_msgs = pytest.importorskip("sensor_msgs")
 builtin_interfaces = pytest.importorskip("builtin_interfaces")
 
 from builtin_interfaces.msg import Time  # noqa: E402

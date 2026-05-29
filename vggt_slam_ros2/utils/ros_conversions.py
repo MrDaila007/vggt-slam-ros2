@@ -1,9 +1,7 @@
 """Conversions between ROS2 messages and numpy/torch tensors."""
 
-import struct
 import numpy as np
-import torch
-from geometry_msgs.msg import TransformStamped, PoseStamped, Transform, Pose
+from geometry_msgs.msg import TransformStamped, PoseStamped
 from sensor_msgs.msg import PointCloud2, PointField, CameraInfo
 from std_msgs.msg import Header
 from builtin_interfaces.msg import Time
@@ -34,8 +32,8 @@ def numpy_to_pointcloud2(
     rgb_packed = np.zeros(n, dtype=np.uint32)
     rgb_packed[:] = (
         (colors[:, 0].astype(np.uint32) << 16) |
-        (colors[:, 1].astype(np.uint32) << 8)  |
-         colors[:, 2].astype(np.uint32)
+        (colors[:, 1].astype(np.uint32) << 8) |
+        colors[:, 2].astype(np.uint32)
     )
     rgb_float = rgb_packed.view(np.float32)
 

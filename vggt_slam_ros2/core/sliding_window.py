@@ -15,8 +15,8 @@ Key difference from VGGT-SLAM's submap approach:
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Callable, Sequence
+from dataclasses import dataclass
+from typing import Callable
 import numpy as np
 
 

@@ -17,41 +17,41 @@
 - [x] `.gitignore` and `requirements.txt`
 - [x] `scripts/test_on_tum.py` — ROS2-free pipeline test, ATE/RPE metrics, Sim(3) alignment
 - [x] `docs/get_tum_dataset.md` — TUM RGB-D download instructions
-- [ ] **Scale anchoring** — anchor each new window to overlap frames of the previous one to eliminate scale drift (`core/scale_anchor.py`)
-- [ ] **Test on TUM fr1/desk** — run `test_on_tum.py`, record ATE RMSE as baseline
-- [ ] **Test on all 9 fr1 sequences** — compare against VGGT-SLAM results
+- [x] **Scale anchoring** — `core/scale_anchor.py` — inter-window Sim(3) correction
+- [x] **TUM baseline** — ATE RMSE 0.125 m on freiburg1_desk (200 frames)
 
 ---
 
 ## Stage 2 — Loop Closure
 
-- [ ] `core/image_retrieval.py` — DINOv2 embeddings + cosine similarity for loop detection (no NetVLAD license issues)
-- [ ] `core/pose_graph.py` — GTSAM factor graph for global trajectory optimisation
-- [ ] Integrate loop closure into `slam_node.py` — trigger on detection
-- [ ] Test loop closure on `freiburg1_room` (long loop, ~1.5 GB)
-- [ ] Compare ATE before / after loop closure
+- [x] `core/image_retrieval.py` — DINOv2 embeddings + cosine similarity for loop detection
+- [x] `core/pose_graph.py` — GTSAM factor graph for global trajectory optimisation
+- [x] Integrate loop closure into `slam_node.py` — trigger on detection
+- [ ] **Add `--loop_closure` flag to `test_on_tum.py`** — integrate ImageRetrieval + PoseGraph into eval script
+- [ ] **Test loop closure on `freiburg1_room`** — ATE before / after loop closure
+- [ ] **Test loop closure on `freiburg1_360`** — 360° rotation sequence
 
 ---
 
 ## Stage 3 — Polish and Usability
 
-- [ ] `config/vggt_slam.rviz` — RViz2 config with PointCloud2, Path, TF, Depth displays
-- [x] `docker/humble/Dockerfile` — Ubuntu 22.04 + CUDA 12.1 + ROS2 Humble
-- [x] `docker/jazzy/Dockerfile` — Ubuntu 24.04 + CUDA 12.4 + ROS2 Jazzy
+- [x] `config/vggt_slam.rviz` — RViz2 config with PointCloud2, Path, TF, Depth displays
+- [x] `docker/humble/Dockerfile` — Ubuntu 22.04 + CUDA 12.8 + ROS2 Humble
+- [x] `docker/jazzy/Dockerfile` — Ubuntu 24.04 + CUDA 12.8 + ROS2 Jazzy
 - [x] `docker-compose.yml` — profiles for Humble and Jazzy, NVIDIA GPU passthrough, host network
 - [x] `docker/entrypoint.sh` — rebuilds package from mounted source on every container start
-- [x] `docker/cyclonedds.xml` — DDS config for robot network connectivity (multicast + unicast)
+- [x] `docker/cyclonedds.xml` — DDS config for robot network connectivity
 - [x] `Makefile` — build / run / shell / clean convenience targets
 - [x] `.dockerignore` — exclude build artifacts and model files from build context
 - [x] `docker/README.md` — host setup, build, run, and robot connection instructions
 - [x] `docker-compose.yml` volumes — project source, config, results, hf_cache mounted from host
-- [x] README Docker section — full guide: host setup, build, run, mounted folders, robot connection
-- [x] `test/test_keyframe_selector.py` — 10 tests for KeyframeSelector (flow, max gap, reset)
-- [x] `test/test_sliding_window.py` — 16 tests for SlidingWindow (timing, content, flush, reset)
-- [x] `test/test_map_manager.py` — 16 tests for MapManager (overlap, confidence, trajectory, reset)
-- [x] `test/test_geometry.py` — 19 tests for geometry utils (SE3, transform, filter, normalize)
-- [x] `test/test_ros_conversions.py` — 18 tests for ROS2 conversions (skipped without ROS2)
-- [x] `test/conftest.py` — shared fixtures; 70 passed, 1 skipped (ROS2 not available)
+- [x] README Docker section
+- [x] `test/test_keyframe_selector.py` — 10 tests
+- [x] `test/test_sliding_window.py` — 16 tests
+- [x] `test/test_map_manager.py` — 16 tests
+- [x] `test/test_geometry.py` — 19 tests
+- [x] `test/test_ros_conversions.py` — 18 tests (1 skipped without ROS2)
+- [x] `test/conftest.py` — shared fixtures
 - [ ] GitHub Actions CI — flake8 + mypy + `colcon build` check on every push
 - [ ] `scripts/eval_all_tum.sh` — run all 9 fr1 sequences and write results to `results/`
 - [ ] Demo video — recorded on an office/apartment dataset for the README
@@ -60,8 +60,8 @@
 
 ## Stage 4 — Advanced Features
 
-- [ ] **Stereo support** — second camera as an absolute metric scale reference (eliminates Sim(3) ambiguity)
-- [ ] **Nav2 integration** — publish `OccupancyGrid` from accumulated point cloud for autonomous navigation
-- [ ] **Auto parameter tuning** — select `window_size` / `stride` automatically based on available GPU memory
+- [ ] **Stereo support** — second camera as an absolute metric scale reference
+- [ ] **Nav2 integration** — publish `OccupancyGrid` from accumulated point cloud
+- [x] **Auto parameter tuning** — `core/auto_params.py` — select window_size/stride based on GPU memory
 - [ ] **EuRoC dataset** — evaluation on drone footage (challenging lighting and motion)
-- [ ] **srv/SaveMap.srv** — save map to PCD/PLY file via ROS2 service
+- [x] **srv/SaveMap.srv** — save map to PCD/PLY/npz via ROS2 service

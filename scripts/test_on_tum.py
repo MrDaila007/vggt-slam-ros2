@@ -22,18 +22,26 @@ Optional arguments
   --out_dir       results/  where to write trajectory & plots
   --max_frames    0         cap on frames to process (0 = all)
   --no_plot                 skip matplotlib visualisation
+  --loop_closure            enable DINOv2 loop detection + GTSAM optimisation
+  --lc_threshold  0.85      cosine similarity threshold for loop detection
+  --lc_min_gap    5.0       minimum time gap (s) between matched loop frames
+  --lc_strategy   rotation  loop closure strategy:
+                              rotation  — VGGT R + odometry t (scale-safe)
+                              normalize — VGGT R + VGGT t rescaled to odom magnitude
+                              dedup     — deduplicate candidates + full VGGT T_rel
 
 Outputs (in --out_dir)
 ----------------------
-  estimated_tum.txt     trajectory in TUM format (evo-compatible)
-  metrics.txt           ATE RMSE, RPE RMSE, mean / max errors
-  trajectory.png        top-down XZ and XY plots vs ground truth
+  estimated_tum.txt         trajectory in TUM format (evo-compatible)
+  metrics.txt               ATE RMSE, RPE RMSE, mean / max errors
+  trajectory.png            top-down XZ and XY plots vs ground truth
+  metrics_lc.txt            (with --loop_closure) metrics after optimisation
+  trajectory_lc.png         (with --loop_closure) corrected trajectory plot
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from pathlib import Path
@@ -48,9 +56,14 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _PKG_ROOT = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_PKG_ROOT))
 
-from vggt_slam_ros2.core.vggt_wrapper import VGGTWrapper
-from vggt_slam_ros2.core.keyframe_selector import KeyframeSelector
-from vggt_slam_ros2.core.sliding_window import SlidingWindow, Keyframe
+from vggt_slam_ros2.core.vggt_wrapper import VGGTWrapper  # noqa: E402
+from vggt_slam_ros2.core.keyframe_selector import KeyframeSelector  # noqa: E402
+from vggt_slam_ros2.core.sliding_window import SlidingWindow, Keyframe  # noqa: E402
+from vggt_slam_ros2.core.scale_anchor import ScaleAnchor  # noqa: E402
+from vggt_slam_ros2.core.image_retrieval import ImageRetrieval  # noqa: E402
+from vggt_slam_ros2.core.pose_graph import (  # noqa: E402
+    PoseGraph, extrinsic_to_world, world_to_extrinsic, relative_pose,
+)
 
 
 # ===========================================================================
@@ -162,15 +175,30 @@ class TUMPipelineRunner:
 
         self._conf_thr = args.conf_thr
         self._overlap = args.window_size - args.window_stride
+        self._use_scale_anchor = not getattr(args, 'no_scale_anchor', False)
+        self._scale_anchor = ScaleAnchor(min_overlap=max(self._overlap // 2, 4))
 
         # Results accumulated across windows:
-        # list of (timestamp, (3,4) extrinsic cam-from-world)
+        # list of (timestamp, (3,4) extrinsic cam-from-world, in global frame)
         self._estimated: list[tuple[float, np.ndarray]] = []
         self._all_points: list[np.ndarray] = []
         self._all_colors: list[np.ndarray] = []
 
         self._window_count = 0
         self._total_infer_time = 0.0
+
+        # Loop closure support (populated only when --loop_closure is set)
+        self._frame_images: list[np.ndarray] = []   # RGB images for re-inference
+        self._loop_candidates: list[tuple[int, int]] = []  # (match_idx, query_idx)
+        self._retrieval: ImageRetrieval | None = None
+        if getattr(args, 'loop_closure', False):
+            print("Initializing DINOv2 for loop closure detection ...")
+            self._retrieval = ImageRetrieval(
+                similarity_threshold=getattr(args, 'lc_threshold', 0.85),
+                min_time_gap=getattr(args, 'lc_min_gap', 5.0),
+                load_on_init=True,
+            )
+            print("DINOv2 ready.\n")
 
     # ------------------------------------------------------------------
 
@@ -212,26 +240,51 @@ class TUMPipelineRunner:
         self._window_count += 1
 
         S = result['extrinsics'].shape[0]
-        out_h, out_w = result['world_points'].shape[1:3]  # VGGT output spatial size (e.g. 518×518)
+        out_h, out_w = result['world_points'].shape[1:3]
         colors_arr = np.stack([
             cv2.resize(np.array(img, dtype=np.uint8), (out_w, out_h))
             for img in images
         ])
 
+        # Scale anchoring: align current window to global frame via overlap frames.
+        if self._use_scale_anchor:
+            extrinsics_g, world_points_g = self._scale_anchor.process(
+                result['extrinsics'],
+                result['world_points'],
+                overlap=self._overlap,
+            )
+        else:
+            extrinsics_g = result['extrinsics']
+            world_points_g = result['world_points']
+
         new_start = self._overlap if self._window_count > 1 else 0
 
         for i in range(new_start, S):
-            ext = result['extrinsics'][i]      # (3,4) cam-from-world
+            ext = extrinsics_g[i]
             self._estimated.append((stamps[i], ext))
 
             # Collect coloured points for optional visualisation
-            pts = result['world_points'][i].reshape(-1, 3)
+            pts = world_points_g[i].reshape(-1, 3)
             col = colors_arr[i].reshape(-1, 3)
             conf = result['world_points_conf'][i].reshape(-1)
             thr = np.percentile(conf, self._conf_thr)
             mask = conf >= thr
             self._all_points.append(pts[mask].astype(np.float32))
             self._all_colors.append(col[mask])
+
+            # Loop closure: embed + query
+            if self._retrieval is not None:
+                candidate = self._retrieval.add_and_query(images[i], stamps[i])
+                if candidate is not None:
+                    self._loop_candidates.append(
+                        (candidate.match_idx, candidate.query_idx)
+                    )
+                    print(
+                        f"    [LOOP] frame {candidate.match_idx} ↔ "
+                        f"{candidate.query_idx}  sim={candidate.similarity:.3f}  "
+                        f"Δt={stamps[i] - candidate.match_stamp:.1f}s"
+                    )
+                self._frame_images.append(images[i])
 
         print(
             f"  Window {self._window_count}: {S} frames, "
@@ -263,6 +316,110 @@ class TUMPipelineRunner:
             T[:3, 3] = -R.T @ t
             result.append((ts, T))
         return result
+
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _dedup_loop_candidates(
+        candidates: list[tuple[int, int]],
+        region: int = 5,
+    ) -> list[tuple[int, int]]:
+        """Keep at most one loop per (match_region, query_region) cell."""
+        seen: list[tuple[int, int]] = []
+        deduped: list[tuple[int, int]] = []
+        for m, q in candidates:
+            if any(abs(m - sm) <= region and abs(q - sq) <= region
+                   for sm, sq in seen):
+                continue
+            seen.append((m, q))
+            deduped.append((m, q))
+        return deduped
+
+    def apply_loop_closure(self) -> bool:
+        """
+        Build GTSAM pose graph, add loop factors, optimize, apply corrections.
+
+        Strategy (--lc_strategy):
+          rotation  — VGGT rotation + odometry translation (preserves scale).
+          normalize — VGGT rotation + VGGT translation rescaled to odometry
+                      magnitude (scale-safe full constraint).
+          dedup     — deduplicate candidates to ≤1 per ±5-frame region,
+                      then use full VGGT T_rel (best ATE potential).
+
+        Returns True if any loops were applied.
+        """
+        if not self._loop_candidates:
+            print("No loop candidates detected — skipping pose graph optimization.")
+            return False
+
+        strategy = getattr(self.args, 'lc_strategy', 'rotation')
+        candidates = self._loop_candidates
+        if strategy == 'dedup':
+            candidates = self._dedup_loop_candidates(candidates)
+            print(
+                f"\nApplying loop closure [{strategy}]: "
+                f"{len(self._loop_candidates)} detected → "
+                f"{len(candidates)} after dedup."
+            )
+        else:
+            print(
+                f"\nApplying loop closure [{strategy}]: "
+                f"{len(candidates)} loop(s) detected."
+            )
+
+        pg = PoseGraph()
+        for _, ext in self._estimated:
+            pg.add_pose(extrinsic_to_world(ext))
+
+        applied = 0
+        for match_idx, query_idx in candidates:
+            if (match_idx >= len(self._frame_images)
+                    or query_idx >= len(self._frame_images)):
+                print(f"  Skip {match_idx} ↔ {query_idx}: index out of range")
+                continue
+
+            pair_result = self._vggt.infer(
+                [self._frame_images[match_idx], self._frame_images[query_idx]]
+            )
+            T_match_vggt = extrinsic_to_world(pair_result['extrinsics'][0])
+            T_query_vggt = extrinsic_to_world(pair_result['extrinsics'][1])
+            T_rel_vggt = relative_pose(T_match_vggt, T_query_vggt)
+
+            T_match_g = extrinsic_to_world(self._estimated[match_idx][1])
+            T_query_g = extrinsic_to_world(self._estimated[query_idx][1])
+            T_rel_global = relative_pose(T_match_g, T_query_g)
+
+            if strategy == 'rotation':
+                # VGGT rotation + odometry translation — preserves scale.
+                T_rel_factor = T_rel_global.copy()
+                T_rel_factor[:3, :3] = T_rel_vggt[:3, :3]
+            elif strategy == 'normalize':
+                # VGGT rotation + VGGT translation direction rescaled to the
+                # odometry magnitude — scale-safe, full directional constraint.
+                T_rel_factor = T_rel_vggt.copy()
+                t_vggt_len = float(np.linalg.norm(T_rel_vggt[:3, 3]))
+                t_global_len = float(np.linalg.norm(T_rel_global[:3, 3]))
+                if t_vggt_len > 1e-6:
+                    T_rel_factor[:3, 3] *= t_global_len / t_vggt_len
+                else:
+                    T_rel_factor[:3, 3] = T_rel_global[:3, 3]
+            else:  # dedup — full VGGT T_rel, scale accepted as-is
+                T_rel_factor = T_rel_vggt
+
+            pg.add_loop(match_idx, query_idx, T_rel_factor)
+            applied += 1
+            print(f"  Loop factor added: {match_idx} ↔ {query_idx}")
+
+        if applied == 0:
+            return False
+
+        print("Running Levenberg-Marquardt optimization...")
+        corrected = pg.optimize()
+        for idx, T_corr in corrected.items():
+            ts, _ = self._estimated[idx]
+            self._estimated[idx] = (ts, world_to_extrinsic(T_corr))
+        print(f"  Corrected {len(corrected)} poses.")
+        return True
 
 
 # ===========================================================================
@@ -307,7 +464,6 @@ def align_sim3(
 
     R = U @ S @ Vt
     scale = float((d * S.diagonal()).sum() / sigma_e)
-    t = mu_r - scale * R @ mu_e
 
     est_aligned = scale * (R @ est_c.T).T + mu_r
     return est_aligned, scale, R
@@ -368,21 +524,39 @@ def save_tum_trajectory(
                     f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f}\n")
 
 
-def save_metrics(metrics_ate: dict, metrics_rpe: dict, scale: float, out_path: Path) -> None:
+def save_metrics(
+    metrics_ate: dict,
+    metrics_rpe: dict,
+    scale: float,
+    out_path: Path,
+    label: str = "",
+    before_ate: dict | None = None,
+) -> None:
+    header = f"=== {label} ===" if label else "=== Results ==="
     lines = [
-        "=== ATE (Absolute Trajectory Error, after Sim3 alignment) ===",
-        f"  RMSE   : {metrics_ate['rmse']:.4f} m",
-        f"  Mean   : {metrics_ate['mean']:.4f} m",
-        f"  Median : {metrics_ate['median']:.4f} m",
-        f"  Std    : {metrics_ate['std']:.4f} m",
-        f"  Max    : {metrics_ate['max']:.4f} m",
+        header,
+        "  ATE (Absolute Trajectory Error, after Sim3 alignment):",
+        f"    RMSE   : {metrics_ate['rmse']:.4f} m",
+        f"    Mean   : {metrics_ate['mean']:.4f} m",
+        f"    Median : {metrics_ate['median']:.4f} m",
+        f"    Std    : {metrics_ate['std']:.4f} m",
+        f"    Max    : {metrics_ate['max']:.4f} m",
+    ]
+    if before_ate is not None:
+        improvement = before_ate['rmse'] - metrics_ate['rmse']
+        pct = improvement / before_ate['rmse'] * 100 if before_ate['rmse'] > 0 else 0
+        lines += [
+            f"    vs no-LC: {before_ate['rmse']:.4f} m → {metrics_ate['rmse']:.4f} m "
+            f"({improvement:+.4f} m, {pct:+.1f}%)",
+        ]
+    lines += [
         "",
-        "=== RPE (Relative Pose Error, delta=1) ===",
-        f"  RMSE   : {metrics_rpe['rmse']:.4f} m",
-        f"  Mean   : {metrics_rpe['mean']:.4f} m",
-        f"  Max    : {metrics_rpe['max']:.4f} m",
+        "  RPE (Relative Pose Error, delta=1):",
+        f"    RMSE   : {metrics_rpe['rmse']:.4f} m",
+        f"    Mean   : {metrics_rpe['mean']:.4f} m",
+        f"    Max    : {metrics_rpe['max']:.4f} m",
         "",
-        f"Sim3 scale factor applied: {scale:.4f}",
+        f"  Sim3 scale factor: {scale:.4f}",
     ]
     text = "\n".join(lines)
     print("\n" + text)
@@ -433,9 +607,9 @@ def plot_trajectory(
 
 def _quat_trans_to_se3(qx, qy, qz, qw, tx, ty, tz) -> np.ndarray:
     R = np.array([
-        [1 - 2*(qy**2 + qz**2),     2*(qx*qy - qz*qw),     2*(qx*qz + qy*qw)],
-        [    2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2),     2*(qy*qz - qx*qw)],
-        [    2*(qx*qz - qy*qw),     2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
+        [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
+        [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
+        [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
     ], dtype=np.float64)
     T = np.eye(4, dtype=np.float64)
     T[:3, :3] = R
@@ -499,8 +673,24 @@ def parse_args() -> argparse.Namespace:
                    help='Cap number of dataset frames (0=all)')
     p.add_argument('--gt_max_diff',    type=float, default=0.02,
                    help='Max timestamp difference (s) for GT association')
-    p.add_argument('--no_plot',        action='store_true',
+    p.add_argument('--no_plot',          action='store_true',
                    help='Skip matplotlib visualisation')
+    p.add_argument('--no_scale_anchor', action='store_true',
+                   help='Disable inter-window Sim(3) scale anchoring')
+    p.add_argument('--loop_closure',    action='store_true',
+                   help='Enable DINOv2 loop detection + GTSAM pose graph optimisation')
+    p.add_argument('--lc_threshold',    type=float, default=0.85,
+                   help='Cosine similarity threshold for loop detection')
+    p.add_argument('--lc_min_gap',      type=float, default=5.0,
+                   help='Minimum time gap (s) between matched loop frames')
+    p.add_argument('--lc_strategy',     default='rotation',
+                   choices=['rotation', 'normalize', 'dedup'],
+                   help=(
+                       'Loop closure strategy: '
+                       'rotation=VGGT-R + odom-t (scale-safe, rotation-only fix); '
+                       'normalize=VGGT-R + VGGT-t rescaled to odom magnitude; '
+                       'dedup=deduplicate candidates then full VGGT T_rel'
+                   ))
     return p.parse_args()
 
 
@@ -533,77 +723,99 @@ def main() -> None:
         print("ERROR: fewer than 4 poses estimated — check dataset path and VGGT installation.")
         sys.exit(1)
 
-    # ---- Save raw trajectory (evo-compatible) --------------------------------
-    est_poses_world = runner.get_estimated_poses_world()
+    # ---- Helper: evaluate current _estimated poses --------------------------
+    def evaluate(label_suffix: str) -> tuple[dict, dict, float]:
+        """
+        Align runner._estimated to GT, compute ATE/RPE.
+        Returns (metrics_ate, metrics_rpe, scale).
+        Saves trajectory + metrics files with label_suffix in the filename.
+        """
+        est_poses_world_cur = runner.get_estimated_poses_world()
+        est_ts_cur, est_trans_cur = runner.get_estimated_translations()
+
+        matched_cur = associate_timestamps(est_ts_cur, gt, max_diff=args.gt_max_diff)
+        if len(matched_cur) < 4:
+            print(f"WARNING: only {len(matched_cur)} GT matches — "
+                  "check timestamps or --gt_max_diff")
+            sys.exit(1)
+        print(f"\nMatched {len(matched_cur)} / {len(est_ts_cur)} poses to ground truth.")
+
+        match_ts_cur = [ts for ts, _ in matched_cur]
+        ref_trans_cur = np.array([T[:3, 3] for _, T in matched_cur])
+        ref_poses_cur = [T for _, T in matched_cur]
+
+        ts_to_idx_cur = {ts: i for i, ts in enumerate(est_ts_cur)}
+        est_trans_m = np.array([
+            est_trans_cur[ts_to_idx_cur[ts]]
+            for ts in match_ts_cur if ts in ts_to_idx_cur
+        ])
+        est_poses_m = [
+            est_poses_world_cur[ts_to_idx_cur[ts]][1]
+            for ts in match_ts_cur if ts in ts_to_idx_cur
+        ]
+
+        N_cur = min(len(est_trans_m), len(ref_trans_cur))
+        est_trans_m = est_trans_m[:N_cur]
+        ref_trans_cur = ref_trans_cur[:N_cur]
+        ref_poses_cur = ref_poses_cur[:N_cur]
+        est_poses_m = est_poses_m[:N_cur]
+
+        print("\nAligning trajectory (Sim3) ...")
+        est_aligned_cur, scale_cur, _ = align_sim3(est_trans_m, ref_trans_cur)
+        print(f"  Scale factor: {scale_cur:.4f}")
+
+        ate = compute_ate(est_aligned_cur, ref_trans_cur)
+        rpe = compute_rpe(est_poses_m, ref_poses_cur, delta=1)
+
+        # Save aligned trajectory
+        tum_path = out_dir / f"{seq_name}_estimated{label_suffix}.txt"
+        aligned_poses_cur = []
+        for i, (ts, T) in enumerate(est_poses_world_cur[:N_cur]):
+            T_al = np.eye(4)
+            T_al[:3, :3] = T[:3, :3]
+            T_al[:3, 3] = est_aligned_cur[i]
+            aligned_poses_cur.append((ts, T_al))
+        save_tum_trajectory(aligned_poses_cur, tum_path)
+        print(f"Trajectory saved → {tum_path}")
+
+        # Plot
+        if not args.no_plot:
+            plot_path = out_dir / f"{seq_name}_trajectory{label_suffix}.png"
+            plot_trajectory(
+                est_aligned_cur, ref_trans_cur, plot_path,
+                title=f"VGGT SLAM — {seq_name}{label_suffix}  |  ATE RMSE: {ate['rmse']:.3f} m",
+            )
+
+        return ate, rpe, scale_cur
+
+    # ---- Save raw trajectory -----------------------------------------------
     raw_tum_path = out_dir / f"{seq_name}_estimated_raw.txt"
-    save_tum_trajectory(est_poses_world, raw_tum_path)
+    save_tum_trajectory(runner.get_estimated_poses_world(), raw_tum_path)
     print(f"Raw trajectory saved → {raw_tum_path}")
 
-    # ---- Associate with ground truth ----------------------------------------
-    est_ts, est_trans = runner.get_estimated_translations()
-    matched = associate_timestamps(est_ts, gt, max_diff=args.gt_max_diff)
-    if len(matched) < 4:
-        print(f"WARNING: only {len(matched)} GT matches — check timestamps or --gt_max_diff")
-        sys.exit(1)
+    # ---- Evaluate BEFORE loop closure (or final if no LC) ------------------
+    suffix_base = "_nolc" if args.loop_closure else "_tum"
+    ate_base, rpe_base, scale_base = evaluate(suffix_base)
 
-    print(f"\nMatched {len(matched)} / {len(est_ts)} estimated poses to ground truth.")
-
-    # Build aligned arrays
-    match_ts = [ts for ts, _ in matched]
-    ref_trans = np.array([T[:3, 3] for _, T in matched])
-    ref_poses_list = [T for _, T in matched]
-
-    # Corresponding estimated translations (same order as matched)
-    ts_to_idx = {ts: i for i, ts in enumerate(est_ts)}
-    est_trans_matched = np.array([
-        est_trans[ts_to_idx[ts]] for ts in match_ts
-        if ts in ts_to_idx
-    ])
-    est_poses_matched = [
-        est_poses_world[ts_to_idx[ts]][1]
-        for ts in match_ts if ts in ts_to_idx
-    ]
-
-    N = min(len(est_trans_matched), len(ref_trans))
-    est_trans_matched = est_trans_matched[:N]
-    ref_trans         = ref_trans[:N]
-    ref_poses_list    = ref_poses_list[:N]
-    est_poses_matched = est_poses_matched[:N]
-
-    # ---- Sim(3) alignment ---------------------------------------------------
-    print("\nAligning trajectory (Sim3) ...")
-    est_aligned, scale, _ = align_sim3(est_trans_matched, ref_trans)
-    print(f"  Scale factor: {scale:.4f}")
-
-    # ---- Metrics ------------------------------------------------------------
-    metrics_ate = compute_ate(est_aligned, ref_trans)
-    metrics_rpe = compute_rpe(est_poses_matched, ref_poses_list, delta=1)
-
-    metrics_path = out_dir / f"{seq_name}_metrics.txt"
-    save_metrics(metrics_ate, metrics_rpe, scale, metrics_path)
+    metrics_path = out_dir / f"{seq_name}_metrics{suffix_base}.txt"
+    label_base = "Without loop closure" if args.loop_closure else "Results"
+    save_metrics(ate_base, rpe_base, scale_base, metrics_path, label=label_base)
     print(f"Metrics saved → {metrics_path}")
 
-    # ---- Save aligned trajectory --------------------------------------------
-    aligned_tum_path = out_dir / f"{seq_name}_estimated_tum.txt"
-    aligned_poses = []
-    for i, (ts, T) in enumerate(est_poses_world[:N]):
-        R_orig = T[:3, :3]
-        t_aligned = est_aligned[i]
-        T_aligned = np.eye(4)
-        T_aligned[:3, :3] = R_orig
-        T_aligned[:3, 3] = t_aligned
-        aligned_poses.append((ts, T_aligned))
-    save_tum_trajectory(aligned_poses, aligned_tum_path)
-    print(f"Aligned trajectory saved → {aligned_tum_path}")
-    print(f"  (Use with evo_ape: evo_ape tum groundtruth.txt {aligned_tum_path} -a)")
-
-    # ---- Plot ---------------------------------------------------------------
-    if not args.no_plot:
-        plot_path = out_dir / f"{seq_name}_trajectory.png"
-        plot_trajectory(
-            est_aligned, ref_trans, plot_path,
-            title=f"VGGT SLAM — {seq_name}  |  ATE RMSE: {metrics_ate['rmse']:.3f} m",
-        )
+    # ---- Loop closure -------------------------------------------------------
+    if args.loop_closure:
+        lc_applied = runner.apply_loop_closure()
+        if lc_applied:
+            ate_lc, rpe_lc, scale_lc = evaluate("_lc")
+            metrics_lc_path = out_dir / f"{seq_name}_metrics_lc.txt"
+            save_metrics(
+                ate_lc, rpe_lc, scale_lc, metrics_lc_path,
+                label="With loop closure",
+                before_ate=ate_base,
+            )
+            print(f"Metrics (with LC) saved → {metrics_lc_path}")
+        else:
+            print("\nNo loop closures applied — baseline metrics are final.")
 
 
 if __name__ == '__main__':

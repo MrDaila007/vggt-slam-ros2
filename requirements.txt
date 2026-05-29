@@ -16,3 +16,9 @@ opencv-python>=4.8.0
 
 # Optional: point cloud downsampling
 open3d>=0.17.0
+
+# Stage 2 — loop closure
+# DINOv2 image retrieval
+transformers>=4.38.0
+# GTSAM pose graph optimisation (pip installable prebuilt wheels)
+gtsam>=4.2

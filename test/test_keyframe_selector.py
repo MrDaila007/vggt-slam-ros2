@@ -1,7 +1,6 @@
 """Tests for KeyframeSelector."""
 
 import numpy as np
-import pytest
 
 from vggt_slam_ros2.core.keyframe_selector import KeyframeSelector
 

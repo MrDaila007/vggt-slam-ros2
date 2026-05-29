@@ -1,0 +1,14 @@
+=== Without loop closure ===
+  ATE (Absolute Trajectory Error, after Sim3 alignment):
+    RMSE   : 0.1250 m
+    Mean   : 0.1116 m
+    Median : 0.1166 m
+    Std    : 0.0563 m
+    Max    : 0.2308 m
+
+  RPE (Relative Pose Error, delta=1):
+    RMSE   : 0.7830 m
+    Mean   : 0.3633 m
+    Max    : 3.0707 m
+
+  Sim3 scale factor: 0.2453

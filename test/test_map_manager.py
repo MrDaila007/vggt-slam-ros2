@@ -1,9 +1,10 @@
 """Tests for MapManager."""
 
+import tempfile
 import numpy as np
-import pytest
+from pathlib import Path
 
-from vggt_slam_ros2.core.map_manager import MapManager, MapFrame
+from vggt_slam_ros2.core.map_manager import MapManager
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -197,3 +198,38 @@ class TestReset:
         mgr.reset()
         _add(mgr, S=2, overlap=0, conf_thr=0.0)
         assert mgr.total_points() == 2 * H * W
+
+
+class TestSaveToFile:
+    def test_save_npz_returns_true(self):
+        mgr = MapManager()
+        _add(mgr, S=2)
+        with tempfile.TemporaryDirectory() as d:
+            ok = mgr.save_to_file(str(Path(d) / "map"), fmt="npz")
+        assert ok is True
+
+    def test_save_npz_file_readable(self):
+        mgr = MapManager()
+        _add(mgr, S=3)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "map"
+            mgr.save_to_file(str(path), fmt="npz")
+            data = np.load(str(path.with_suffix(".npz")))
+            assert "points" in data
+            assert "colors" in data
+            assert data["points"].shape[1] == 3
+            assert data["colors"].shape[1] == 3
+
+    def test_save_returns_false_when_empty(self):
+        mgr = MapManager()
+        with tempfile.TemporaryDirectory() as d:
+            ok = mgr.save_to_file(str(Path(d) / "empty"), fmt="npz")
+        assert ok is False
+
+    def test_creates_parent_directories(self):
+        mgr = MapManager()
+        _add(mgr, S=1)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "a" / "b" / "map"
+            mgr.save_to_file(str(path), fmt="npz")
+            assert path.with_suffix(".npz").exists()

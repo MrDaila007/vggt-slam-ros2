@@ -14,7 +14,7 @@ Design notes:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import numpy as np
 from typing import Optional
 
@@ -130,15 +130,53 @@ class MapManager:
         self._frames.clear()
         self._total_points = 0
 
+    def save_to_file(self, path: str, fmt: str = "pcd") -> bool:
+        """
+        Save the accumulated point cloud to disk.
+
+        Parameters
+        ----------
+        path : absolute file path (extension is replaced with `fmt`)
+        fmt  : "pcd", "ply", or "npz"
+
+        Returns True on success, False on failure.
+        Open3D is used for pcd/ply; falls back to npz if not available.
+        """
+        from pathlib import Path as _Path
+
+        pts = self.get_all_points()
+        cols = self.get_all_colors()
+
+        if pts.shape[0] == 0:
+            return False
+
+        out_path = _Path(path).with_suffix(f".{fmt}")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if fmt in ("pcd", "ply"):
+            try:
+                import open3d as o3d
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(pts.astype(np.float64))
+                pcd.colors = o3d.utility.Vector3dVector(cols.astype(np.float64) / 255.0)
+                o3d.io.write_point_cloud(str(out_path), pcd, write_ascii=False)
+                return True
+            except ImportError:
+                fmt = "npz"   # fall through to npz
+                out_path = _Path(path).with_suffix(".npz")
+
+        np.savez_compressed(str(out_path), points=pts, colors=cols)
+        return True
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _voxel_downsample(
+    def _voxel_downsample_impl(
         pts: np.ndarray, cols: np.ndarray, voxel_size: float = 0.05
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Simple voxel grid filter — uses Open3D if available, else numpy."""
+        """Voxel grid filter — uses Open3D if available, else passthrough."""
         try:
             import open3d as o3d
             pcd = o3d.geometry.PointCloud()
@@ -151,6 +189,7 @@ class MapManager:
         except ImportError:
             return pts, cols
 
-    # make voxel_size available to the static method
-    def _voxel_downsample(self, pts, cols):  # type: ignore[override]
-        return MapManager._voxel_downsample(pts, cols, self.voxel_size or 0.05)
+    def _voxel_downsample(
+        self, pts: np.ndarray, cols: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        return MapManager._voxel_downsample_impl(pts, cols, self.voxel_size or 0.05)

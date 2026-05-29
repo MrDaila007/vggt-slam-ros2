@@ -44,11 +44,15 @@ class VGGTWrapper:
                 use_bf16 and torch.cuda.get_device_capability()[0] >= 8
             ) else torch.float16
         else:
-            self.dtype = torch.float32  # half precision not supported on CPU
+            self.dtype = torch.float32
 
         self.model = VGGT.from_pretrained(checkpoint)
         self.model.eval()
-        self.model = self.model.to(self.dtype).to(self.device)
+        # Keep model in fp32 on the target device. autocast (below) dynamically
+        # casts eligible ops to self.dtype while keeping stable ops (LayerNorm,
+        # Softmax) in fp32. Casting the model to bf16 before calling it conflicts
+        # with VGGT's internal autocast(enabled=False) blocks that expect fp32 weights.
+        self.model = self.model.to(self.device)
 
     # ------------------------------------------------------------------
     # Public API
@@ -67,10 +71,15 @@ class VGGTWrapper:
           - depth:        (S, H, W) float32
           - depth_conf:   (S, H, W) float32
         """
-        tensor = self._preprocess(images_rgb)          # (S, 3, H, W)
-        tensor = tensor.to(self.dtype).to(self.device)
+        tensor = self._preprocess(images_rgb)          # (S, 3, H, W) float32
+        tensor = tensor.to(self.device)
 
-        with torch.amp.autocast(device_type=self.device.split(':')[0], dtype=self.dtype):
+        # Model stays in fp32; autocast promotes eligible ops to self.dtype (bf16/fp16)
+        # for speed while keeping stable ops (LayerNorm, etc.) in fp32 — consistent
+        # with VGGT's internal autocast(enabled=False) blocks which expect fp32 weights.
+        device_type = self.device.split(':')[0]  # e.g. 'cuda' from 'cuda:0'
+        enabled = (self.dtype != torch.float32)
+        with torch.amp.autocast(device_type=device_type, dtype=self.dtype, enabled=enabled):
             raw = self.model(tensor)
 
         return self._postprocess(raw)

@@ -63,3 +63,28 @@
 
     # Period (seconds) between full-map publishes.
     full_map_period: 5.0
+
+    # ---------------------------------------------------------------
+    # Stage 2 — Loop closure (optional)
+    # ---------------------------------------------------------------
+    # Set to true to enable DINOv2 image retrieval + GTSAM pose graph.
+    # Requires 'transformers' and 'gtsam' Python packages.
+    enable_loop_closure: false
+
+    # Cosine similarity threshold for a loop candidate (0–1].
+    # Higher = fewer false positives but lower recall.
+    lc_similarity_threshold: 0.85
+
+    # Minimum time gap (seconds) between query and matched frame.
+    # Prevents matching temporally adjacent frames.
+    lc_min_time_gap: 10.0
+
+    # ---------------------------------------------------------------
+    # Stage 4 — Automatic parameter tuning
+    # ---------------------------------------------------------------
+    # If true, window_size and window_stride are auto-selected at
+    # startup based on available GPU memory. Overrides the values above.
+    auto_tune_params: false
+
+    # GPU memory budget in GB. 0 = auto-detect via torch.cuda.mem_get_info().
+    auto_tune_budget_gb: 0.0

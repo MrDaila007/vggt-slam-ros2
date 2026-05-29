@@ -1,28 +1,61 @@
 #!/bin/bash
 # Container entrypoint.
-# Rebuilds the package from the mounted source on every start,
-# then sources the workspace and runs CMD.
+# Rebuilds the package only when build-critical files change.
+# Pure Python changes (.py) are picked up instantly via --symlink-install.
 set -e
 
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 
 WS=/ros2_ws
 SRC="${WS}/src/vggt_slam_ros2"
-INSTALL="${WS}/install/vggt_slam_ros2"
+HASH_FILE="${WS}/build/.vggt_slam_src_hash"
 
-# Rebuild if the source is mounted (directory exists and has setup.py)
-if [ -f "${SRC}/setup.py" ]; then
-    echo "[entrypoint] Building vggt_slam_ros2 from mounted source..."
-    cd "${WS}"
-    colcon build \
-        --packages-select vggt_slam_ros2 \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release \
-        --symlink-install \
-        2>&1 | grep -v "^Starting\|^Finished\|^Summary"
-    echo "[entrypoint] Build complete."
+_needs_rebuild() {
+    # Hash files that actually affect the colcon/CMake/rosidl build output.
+    # Changes to .py files don't need a rebuild (symlink-install).
+    local current_hash
+    current_hash=$(find "${SRC}" \
+        \( -name "CMakeLists.txt" \
+           -o -name "package.xml" \
+           -o -name "setup.py" \
+           -o -name "setup.cfg" \
+           -o -name "*.srv" \
+           -o -name "*.msg" \
+           -o -name "*.action" \
+        \) -type f | sort | xargs md5sum 2>/dev/null | md5sum)
+
+    local prev_hash
+    prev_hash=$(cat "${HASH_FILE}" 2>/dev/null || echo "")
+
+    if [ "${current_hash}" = "${prev_hash}" ] \
+       && [ -f "${WS}/install/vggt_slam_ros2/share/vggt_slam_ros2/package.xml" ]; then
+        echo "${current_hash}"   # non-empty = unchanged
+        return 1                 # no rebuild needed
+    fi
+    echo "${current_hash}"
+    return 0
+}
+
+if [ -f "${SRC}/CMakeLists.txt" ] || [ -f "${SRC}/setup.py" ]; then
+    src_hash=$(_needs_rebuild) && REBUILD=1 || REBUILD=0
+
+    if [ "${REBUILD}" -eq 1 ]; then
+        echo "[entrypoint] Build-critical files changed — rebuilding vggt_slam_ros2..."
+        cd "${WS}"
+        rm -rf "${WS}/build/vggt_slam_ros2" "${WS}/install/vggt_slam_ros2"
+        colcon build \
+            --packages-select vggt_slam_ros2 \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release \
+            --symlink-install \
+            2>&1 | grep -v "^Starting\|^Finished\|^Summary"
+        mkdir -p "$(dirname "${HASH_FILE}")"
+        echo "${src_hash}" > "${HASH_FILE}"
+        echo "[entrypoint] Build complete."
+    else
+        echo "[entrypoint] Source unchanged — skipping build."
+    fi
 fi
 
-# Source the built workspace
 if [ -f "${WS}/install/setup.bash" ]; then
     source "${WS}/install/setup.bash"
 fi

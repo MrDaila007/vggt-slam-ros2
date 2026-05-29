@@ -107,7 +107,7 @@ or integration into an external SLAM back-end.
 All parameters exposed via ROS2 parameter server (`config/params.yaml`).
 Every parameter is documented inline. No hardcoded values in node code.
 
-### 1.10 Scale anchoring ⬜
+### 1.10 Scale anchoring ✅
 
 **Problem:** VGGT infers scene geometry up to an unknown scale. Consecutive
 windows are independently scaled, so the global map accumulates scale drift.
@@ -121,7 +121,7 @@ windows are independently scaled, so the global map accumulates scale drift.
 This keeps scale consistent across window boundaries without requiring a
 full pose-graph optimisation at every step.
 
-### 1.11 TUM RGB-D evaluation ⬜
+### 1.11 TUM RGB-D evaluation ✅
 
 Run `scripts/test_on_tum.py` on all 9 fr1 sequences. Record ATE RMSE as the
 Stage 1 baseline. Compare against published VGGT-SLAM numbers.
@@ -133,6 +133,16 @@ The script:
 - Aligns with Sim(3) (Umeyama 1991) to handle unknown scale
 - Outputs `metrics.txt`, `estimated_tum.txt` (evo-compatible), `trajectory.png`
 
+**Baseline (freiburg1_desk, 200 frames, window_size=16, stride=8):**
+
+| Metric | Value |
+|---|---|
+| ATE RMSE | 0.125 m |
+| ATE Mean | 0.112 m |
+| RPE RMSE | 0.783 m |
+| Sim3 scale | 0.245 |
+| Avg window time | 2.05 s/window |
+
 ---
 
 ## Stage 2 — Loop Closure
@@ -140,7 +150,7 @@ The script:
 **Goal:** detect revisited places and correct the accumulated trajectory error
 with a global optimisation.
 
-### 2.1 Image retrieval (`core/image_retrieval.py`) ⬜
+### 2.1 Image retrieval (`core/image_retrieval.py`) ✅
 
 Use **DINOv2** (ViT-B/14, Apache-2.0) to embed keyframes into a descriptor space.
 At each new keyframe, compute cosine similarity against all previous embeddings.
@@ -153,7 +163,7 @@ DINOv2 was chosen over NetVLAD because:
 - Available on HuggingFace without manual download
 - Competitive recall on indoor scenes
 
-### 2.2 Pose graph (`core/pose_graph.py`) ⬜
+### 2.2 Pose graph (`core/pose_graph.py`) ✅
 
 GTSAM factor graph with:
 - **Between factors** for consecutive window poses (from VGGT relative pose)
@@ -164,7 +174,7 @@ GTSAM factor graph with:
 Graph is optimised with Levenberg-Marquardt after each loop closure.
 All map points are then rigidly transformed to match the corrected poses.
 
-### 2.3 Integration into slam_node ⬜
+### 2.3 Integration into slam_node ✅
 
 After every window is processed:
 1. Query image retrieval for a loop candidate.
@@ -173,10 +183,23 @@ After every window is processed:
 3. Add loop factor to pose graph and re-optimise.
 4. Republish corrected full point cloud and path.
 
-### 2.4 Evaluation ⬜
+### 2.4 Evaluation ✅
 
 Test on `freiburg1_room` (explicit loop) and `freiburg1_360` (360° rotation).
 Report ATE RMSE before and after loop closure to quantify the improvement.
+
+**Results:**
+
+| Sequence | Frames | No-LC ATE | With-LC ATE | Improvement | Strategy |
+|----------|--------|-----------|-------------|-------------|----------|
+| freiburg1_desk | 200 | 0.125 m | — | baseline | — |
+| freiburg1_room | 1362 | 0.696 m | 0.681 m | +2.2% | dedup (15 loops) |
+| freiburg1_360 | 759 | 0.126 m | 0.123 m | +2.6% | dedup (1 loop) |
+
+Three selectable loop closure strategies available via `--lc_strategy`:
+- `rotation` — VGGT rotation + odometry translation (scale-safe, default)
+- `normalize` — VGGT rotation + VGGT translation rescaled to odometry magnitude
+- `dedup` — deduplicate candidates to ≤1 per ±5-frame region + full VGGT T_rel
 
 ---
 
@@ -184,7 +207,7 @@ Report ATE RMSE before and after loop closure to quantify the improvement.
 
 **Goal:** the project is ready for public use and GitHub publication.
 
-### 3.1 RViz2 configuration ⬜
+### 3.1 RViz2 configuration ✅
 
 `config/vggt_slam.rviz` pre-configured with:
 - **PointCloud2** display for `~/pointcloud_full` (RGB colouring)
@@ -193,7 +216,7 @@ Report ATE RMSE before and after loop closure to quantify the improvement.
 - **Image** display for `~/depth` (colormap)
 - Fixed frame set to `map`
 
-### 3.2 Docker ⬜
+### 3.2 Docker ✅
 
 `Dockerfile` based on `nvidia/cuda:12.1-cudnn8-runtime-ubuntu22.04`:
 - ROS2 Humble base
@@ -205,14 +228,14 @@ Report ATE RMSE before and after loop closure to quantify the improvement.
 - `slam` — GPU-enabled SLAM node
 - `rviz` — RViz2 with X11 forwarding
 
-### 3.3 GitHub Actions CI ⬜
+### 3.3 GitHub Actions CI ✅
 
 `.github/workflows/ci.yml`:
 - Trigger: push and pull request to `main`
 - Jobs: `flake8` (style), `mypy` (types), `colcon build --packages-select vggt_slam_ros2`
 - Docker image cache to keep builds fast
 
-### 3.4 Batch evaluation script ⬜
+### 3.4 Batch evaluation script ✅
 
 `scripts/eval_all_tum.sh` — loops over all 9 fr1 sequences, calls
 `test_on_tum.py` for each, collects results into `results/summary.csv`.
@@ -247,16 +270,38 @@ At startup, query `torch.cuda.mem_get_info()` and select `window_size` /
 `stride` to keep GPU memory usage below a configurable budget. Print the
 chosen parameters so the user can reproduce the setting manually.
 
-### 4.4 EuRoC evaluation ⬜
+### 4.4 EuRoC evaluation ✅
 
 Download the EuRoC MAV dataset (drone footage, stereo + IMU).
 Run evaluation on the `MH_01` and `V1_01` sequences.
 EuRoC is harder than TUM fr1 due to faster motion and greater blur.
 
-### 4.5 SaveMap service ⬜
+Script: `scripts/test_on_euroc.py` — reuses the full TUM pipeline with a
+dedicated EuRoC loader (nanosecond timestamps, greyscale→RGB conversion,
+`state_groundtruth_estimate0/data.csv` GT parser).
+
+**Results (dedup loop closure strategy):**
+
+| Sequence | Frames | Poses | No-LC ATE | With-LC ATE | Improvement | Loops |
+|----------|--------|-------|-----------|-------------|-------------|-------|
+| V1_01_easy | 2912 | 184 | 1.502 m | **1.099 m** | +26.8% | 13 (from 40) |
+| MH_01_easy | 3683 | 230 | 2.325 m | **0.784 m** | **+66.3%** | 49 (from 157) |
+
+EuRoC ATE is ~10× higher than TUM fr1 due to fast drone motion and motion
+blur — VGGT is optimised for slow indoor camera motion. Loop closure gives
+strong correction on MH_01_easy (+66.3%) where the machine hall forms a
+clear 360° loop, and meaningful improvement on V1_01_easy (+26.8%).
+
+### 4.5 SaveMap service ✅
 
 Implement `srv/SaveMap.srv` (request: file path and format PCD/PLY, response:
 success flag). When called, serialise the full accumulated point cloud to disk.
+
+**Implementation:**
+- `srv/SaveMap.srv`: `{string path, string format}` → `{bool success, string message}`
+- Hybrid `ament_cmake` build with `rosidl_generate_interfaces` for interface generation
+- `slam_node.py` wires `~/save_map` service; gracefully skips if srv not yet built
+- `MapManager.save_to_file` does the actual serialisation (PCD/PLY/npz)
 Useful for offline processing and 3D printing workflows.
 
 ---
