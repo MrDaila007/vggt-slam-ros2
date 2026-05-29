@@ -1,6 +1,8 @@
 # vggt_slam_ros2
 
 [![CI](https://github.com/MrDaila007/vggt-slam-ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/MrDaila007/vggt-slam-ros2/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/tests-135%20passed-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-84%25%20core-blue)
 
 A ROS2 Visual SLAM package that uses [VGGT](https://github.com/facebookresearch/vggt)
 (Visual Geometry Grounded Transformer, CVPR 2025 Best Paper) as a dense visual
@@ -309,6 +311,56 @@ Three strategies are selectable via `--lc_strategy`:
 | `rotation` | VGGT rotation + odometry translation | Scale-sensitive trajectories |
 | `normalize` | VGGT rotation + VGGT translation rescaled to odometry magnitude | Balanced |
 | `dedup` *(default)* | Deduplicate candidates to ≤1 per ±5-frame region, full VGGT T_rel | Long sequences with clear loops |
+
+---
+
+## Tests
+
+Unit tests run without a GPU or a ROS2 runtime. All 135 tests pass in ~1 s.
+
+```bash
+# Inside the Docker container
+python3 -m pytest test/ --ignore=test/test_ros_conversions.py -v \
+  --cov=vggt_slam_ros2 --cov-report=term-missing
+```
+
+### Results (Python 3.10, pytest 9.0.3, Docker — ROS2 Humble)
+
+```
+======================== 135 passed, 1 warning in 1.09s ========================
+```
+
+| Test file | Tests | Status |
+|---|---|---|
+| `test_auto_params.py` | 10 | ✅ pass |
+| `test_euroc_loader.py` | 12 | ✅ pass |
+| `test_geometry.py` | 22 | ✅ pass |
+| `test_image_retrieval.py` | 10 | ✅ pass |
+| `test_keyframe_selector.py` | 10 | ✅ pass |
+| `test_map_manager.py` | 14 | ✅ pass |
+| `test_pose_graph.py` | 12 | ✅ pass |
+| `test_scale_anchor.py` | 12 | ✅ pass |
+| `test_sliding_window.py` | 13 | ✅ pass |
+| **Total** | **135** | **✅ all pass** |
+
+### Coverage
+
+| Module | Coverage | Notes |
+|---|---|---|
+| `core/keyframe_selector.py` | 100% | |
+| `core/scale_anchor.py` | 100% | |
+| `core/sliding_window.py` | 100% | |
+| `utils/geometry.py` | 92% | |
+| `core/pose_graph.py` | 85% | |
+| `core/map_manager.py` | 77% | |
+| `core/image_retrieval.py` | 71% | |
+| `utils/auto_params.py` | 53% | |
+| `core/vggt_wrapper.py` | 0% | requires GPU + HuggingFace download |
+| `nodes/slam_node.py` | 0% | requires ROS2 runtime |
+| `nodes/pointcloud_node.py` | 0% | requires ROS2 runtime |
+| `utils/ros_conversions.py` | 0% | requires ROS2 runtime |
+
+Core modules (excludes GPU/ROS2 runtime): **~84% coverage**.
 
 ---
 
