@@ -1,5 +1,11 @@
 .git
 .github
+data/
+test/
+docs/
+.coverage
+.pytest_cache
+*.md
 .venv
 venv
 __pycache__

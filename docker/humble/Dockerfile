@@ -75,7 +75,7 @@ RUN pip3 install --no-cache-dir \
 ARG VGGT_REF=main
 RUN git clone https://github.com/facebookresearch/vggt.git /opt/vggt && \
     git -C /opt/vggt checkout ${VGGT_REF}
-ENV PYTHONPATH="/opt/vggt:${PYTHONPATH}"
+ENV PYTHONPATH=/opt/vggt
 
 # ── Copy and build our package ───────────────────────────────────────────────
 WORKDIR /ros2_ws
