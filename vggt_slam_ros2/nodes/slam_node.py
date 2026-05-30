@@ -305,6 +305,7 @@ class VGGTSlamNode(LifecycleNode):
 
     def _on_window_ready(self, frames: list[Keyframe]) -> None:
         """Put window batch into queue for async VGGT inference."""
+        self.get_logger().info(f"Window ready ({len(frames)} frames) → inference queue")
         try:
             self._infer_queue.put_nowait(frames)
         except queue.Full:
@@ -343,6 +344,9 @@ class VGGTSlamNode(LifecycleNode):
         t0 = time.monotonic()
         result = self._vggt.infer(images_rgb)
         dt = time.monotonic() - t0
+        self.get_logger().info(
+            f"VGGT window done: {len(frames)} frames in {dt:.2f}s"
+        )
         self.get_logger().debug(
             f"VGGT inferred {len(frames)} frames in {dt:.3f}s "
             f"({len(frames)/dt:.1f} fps)"

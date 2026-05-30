@@ -75,7 +75,7 @@ logs-jazzy:
 # Usage:
 #   make eval-tum DATASET=/path/to/rgbd_dataset_freiburg1_desk
 #   make eval-tum DATASET=data/rgbd_dataset_freiburg1_desk MAX_FRAMES=200
-TUM_DATASET ?= data/rgbd_dataset_freiburg1_desk
+TUM_DATASET ?= src/vggt_slam_ros2/data/rgbd_dataset_freiburg1_desk
 MAX_FRAMES  ?= 0
 
 .PHONY: eval-tum
@@ -94,3 +94,21 @@ eval-tum:
 	    --dataset /ros2_ws/$(TUM_DATASET) \
 	    --out_dir /ros2_ws/results \
 	    --max_frames $(MAX_FRAMES)
+
+# ── TUM → ROS2 playback (demo / RViz) ─────────────────────────────────────
+# Usage:
+#   make play-tum                                    # desk, 80 frames
+#   make play-tum TUM_DATASET=data/rgbd_dataset_freiburg1_room MAX_FRAMES=0
+TUM_RATE       ?= 10
+PLAY_MAX_FRAMES ?= 80
+
+.PHONY: play-tum
+play-tum:
+	docker compose --profile humble up -d
+	docker compose --profile humble exec vggt-slam-humble bash -c '\
+	  source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && \
+	  python3 /ros2_ws/src/vggt_slam_ros2/scripts/play_tum_to_ros.py \
+	    --dataset /ros2_ws/$(TUM_DATASET) \
+	    --rate $(TUM_RATE) \
+	    --max-frames $(PLAY_MAX_FRAMES) \
+	    --start-delay 1'
