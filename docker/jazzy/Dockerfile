@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip python3-dev \
     git wget \
     libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+    libxcb-cursor0 libxkbcommon-x11-0 libfontconfig1 \
     && rm -rf /var/lib/apt/lists/*
 
 # ── ROS2 Jazzy ───────────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-tf2-geometry-msgs \
     ros-jazzy-nav2-lifecycle-manager \
     ros-jazzy-diagnostic-msgs \
+    ros-jazzy-rviz2 \
     python3-colcon-common-extensions \
     python3-rosdep \
     && rm -rf /var/lib/apt/lists/*

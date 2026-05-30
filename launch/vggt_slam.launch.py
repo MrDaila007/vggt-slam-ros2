@@ -11,11 +11,11 @@ Remapping camera topics (example for a RealSense D435):
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo
+from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import LifecycleNode, Node
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import PushRosNamespace
 
 
 def generate_launch_description():
@@ -29,6 +29,7 @@ def generate_launch_description():
         DeclareLaunchArgument('camera_info_topic', default_value='/camera/camera_info'),
         DeclareLaunchArgument('namespace',      default_value='vggt_slam'),
         DeclareLaunchArgument('autostart',      default_value='true'),
+        DeclareLaunchArgument('use_rviz',       default_value='false'),
     ]
 
     params_file = LaunchConfiguration('params_file')
@@ -65,12 +66,13 @@ def generate_launch_description():
         output='screen',
     )
 
-    # ---- RViz (optional) -------------------------------------------------
-    # Uncomment if you want RViz to launch automatically:
-    # rviz_node = Node(
-    #     package='rviz2',
-    #     executable='rviz2',
-    #     arguments=['-d', PathJoinSubstitution([pkg, 'config', 'vggt_slam.rviz'])],
-    # )
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', PathJoinSubstitution([pkg, 'config', 'vggt_slam.rviz'])],
+        condition=IfCondition(LaunchConfiguration('use_rviz')),
+        output='screen',
+    )
 
-    return LaunchDescription(args + [slam_node, lifecycle_manager])
+    return LaunchDescription(args + [slam_node, lifecycle_manager, rviz_node])

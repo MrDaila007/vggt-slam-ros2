@@ -71,6 +71,7 @@ services:
       ros2 launch vggt_slam_ros2 vggt_slam.launch.py
       image_topic:=${IMAGE_TOPIC:-/camera/image_raw}
       camera_info_topic:=${CAMERA_INFO_TOPIC:-/camera/camera_info}
+      use_rviz:=${USE_RVIZ:-false}
 
   # ── ROS2 Jazzy ──────────────────────────────────────────────────────────────
   vggt-slam-jazzy:
@@ -89,6 +90,7 @@ services:
       ros2 launch vggt_slam_ros2 vggt_slam.launch.py
       image_topic:=${IMAGE_TOPIC:-/camera/image_raw}
       camera_info_topic:=${CAMERA_INFO_TOPIC:-/camera/camera_info}
+      use_rviz:=${USE_RVIZ:-false}
 
 volumes:
   # Named volume so the ~2-4 GB VGGT model is downloaded only once
