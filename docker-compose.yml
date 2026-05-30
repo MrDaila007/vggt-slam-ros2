@@ -32,6 +32,8 @@ x-slam-base: &slam-base
     - hf_cache:/root/.cache/huggingface
     # colcon build cache — incremental rebuilds instead of full clean each start
     - colcon_build_cache:/ros2_ws/build
+    # colcon install — keep Python layout across container restarts
+    - colcon_install_cache:/ros2_ws/install
     # ── Project folders mounted from the host ──────────────────────────────
     # Source code: edit on the host, container rebuilds on next start
     - ./:/ros2_ws/src/vggt_slam_ros2:ro
@@ -41,6 +43,8 @@ x-slam-base: &slam-base
     - ./results:/ros2_ws/results:rw
     # DDS config
     - ./docker/cyclonedds.xml:/etc/cyclonedds/cyclonedds.xml:ro
+    # Entrypoint from host — no image rebuild needed for startup script fixes
+    - ./docker/entrypoint.sh:/entrypoint.sh:ro
   # Host network = DDS discovery works exactly like a native ROS2 node.
   # The container sees the same network as the robot.
   network_mode: host
@@ -91,3 +95,5 @@ volumes:
   hf_cache:
   # colcon incremental build cache (CMake + rosidl artifacts)
   colcon_build_cache:
+  # colcon install tree (executables + Python modules)
+  colcon_install_cache:

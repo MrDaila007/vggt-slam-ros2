@@ -50,7 +50,8 @@ def generate_launch_description():
         output='screen',
     )
 
-    # ---- Lifecycle manager (auto-activates the node) ---------------------
+    # Nav2 lifecycle manager brings the node through configure → activate.
+    # bond_timeout must be 0: rclpy LifecycleNode does not implement Nav2 bonds.
     lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
@@ -59,6 +60,7 @@ def generate_launch_description():
         parameters=[{
             'autostart': LaunchConfiguration('autostart'),
             'node_names': ['vggt_slam_node'],
+            'bond_timeout': 0.0,
         }],
         output='screen',
     )
