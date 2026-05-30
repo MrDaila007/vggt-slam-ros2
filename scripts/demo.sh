@@ -7,7 +7,7 @@
 #   ./scripts/demo.sh --detach     # background SLAM (+ playback if not --no-play)
 #
 # Prerequisites:
-#   make build-humble   # image includes ros-humble-rviz2
+#   make build-humble-dev   # dev image includes ros-humble-rviz2
 #   export DISPLAY=:1   # your X11 display (check with echo $DISPLAY)
 #
 # Environment (optional):
@@ -42,6 +42,8 @@ done
 TUM_DATASET="${TUM_DATASET:-src/vggt_slam_ros2/data/rgbd_dataset_freiburg1_desk}"
 TUM_RATE="${TUM_RATE:-10}"
 PLAY_MAX_FRAMES="${PLAY_MAX_FRAMES:-200}"
+SLAM_IMAGE="${SLAM_IMAGE:-vggt-slam-ros2:humble-dev}"
+export SLAM_IMAGE
 COMPOSE="docker compose --profile humble"
 SLAM_SERVICE="vggt-slam-humble"
 RVIZ_CONFIG="/ros2_ws/install/vggt_slam_ros2/share/vggt_slam_ros2/config/vggt_slam.rviz"
@@ -73,7 +75,7 @@ ensure_rviz_in_image() {
     fi
     echo "[demo] ERROR: ros-humble-rviz2 not found in container." >&2
     echo "[demo] Rebuild the image, then restart:" >&2
-    echo "[demo]   make build-humble" >&2
+    echo "[demo]   make build-humble-dev" >&2
     echo "[demo]   make stop && make demo" >&2
     exit 1
 }

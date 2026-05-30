@@ -76,14 +76,17 @@ docker run --rm --gpus all nvidia/cuda:12.1.1-base-ubuntu22.04 nvidia-smi
 ### 2 — Build the image
 
 ```bash
-# ROS2 Humble  (Ubuntu 22.04 + CUDA 12.1, driver ≥ 525)
+# Runtime (smaller — robot / production)
 make build-humble
 
-# ROS2 Jazzy   (Ubuntu 24.04 + CUDA 12.4, driver ≥ 550)
+# Dev (RViz, colcon rebuild, make demo / eval-tum)
+make build-humble-dev
+
+# Jazzy
 make build-jazzy
 ```
 
-Build time: ~15–25 min (downloads PyTorch, VGGT, ROS2 packages).
+Build time: ~15–30 min on first build. See `docker/README.md` for image sizes and `make docker-prune` to clear build cache.
 The VGGT-1B model (~2.4 GB) is **not** baked into the image — it is
 downloaded on first run and cached in the `hf_cache` Docker volume.
 
@@ -149,15 +152,15 @@ ros2 topic echo /vggt_slam/pose
 
 | Target | Description |
 |---|---|
-| `make build-humble` | Build the ROS2 Humble image |
-| `make build-jazzy` | Build the ROS2 Jazzy image |
-| `make build-all` | Build both images |
-| `make run-humble` | Start the Humble container via Compose |
-| `make run-jazzy` | Start the Jazzy container via Compose |
-| `make shell-humble` | Interactive bash — Humble |
-| `make shell-jazzy` | Interactive bash — Jazzy |
-| `make stop` | Stop running containers |
-| `make clean` | Stop + remove images and volumes |
+| `make build-humble` | Build Humble **runtime** image (SLAM on robot) |
+| `make build-humble-dev` | Build Humble **dev** image (RViz, colcon, eval) |
+| `make build-jazzy` / `make build-jazzy-dev` | Same for Jazzy |
+| `make run-humble` | Start runtime container |
+| `make run-humble-dev` | Start dev container |
+| `make demo` | SLAM + RViz + TUM (uses dev image) |
+| `make eval-tum` | Offline TUM eval (dev image) |
+| `make docker-prune` | Clear Docker build cache |
+| `make stop` / `make clean` | Stop containers / remove volumes |
 
 ---
 

@@ -58,10 +58,11 @@ services:
   vggt-slam-humble:
     <<: *slam-base
     profiles: [humble]
-    image: vggt-slam-ros2:humble
+    image: ${SLAM_IMAGE:-vggt-slam-ros2:humble}
     build:
       context: .
       dockerfile: docker/humble/Dockerfile
+      target: ${DOCKER_TARGET:-runtime}
       args:
         VGGT_REF: ${VGGT_REF:-main}
     environment:
@@ -77,10 +78,11 @@ services:
   vggt-slam-jazzy:
     <<: *slam-base
     profiles: [jazzy]
-    image: vggt-slam-ros2:jazzy
+    image: ${SLAM_IMAGE:-vggt-slam-ros2:jazzy}
     build:
       context: .
       dockerfile: docker/jazzy/Dockerfile
+      target: ${DOCKER_TARGET:-runtime}
       args:
         VGGT_REF: ${VGGT_REF:-main}
     environment:

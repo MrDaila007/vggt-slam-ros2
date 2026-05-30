@@ -1,9 +1,13 @@
 # Docker — vggt-slam-ros2
 
-Two images are provided: one for **ROS2 Humble** (Ubuntu 22.04 + CUDA 12.1)
-and one for **ROS2 Jazzy** (Ubuntu 24.04 + CUDA 12.4).
-Both images pass the NVIDIA GPU through to the container and connect to the
-robot's ROS2 network via host networking.
+Two ROS distros (**Humble** / **Jazzy**), each with two image targets:
+
+| Target | Tag | Use case | Approx. size |
+|--------|-----|----------|--------------|
+| `runtime` (default) | `vggt-slam-ros2:humble` | Robot / SLAM inference | ~25–35 GB |
+| `dev` | `vggt-slam-ros2:humble-dev` | RViz, colcon rebuild, TUM eval | ~30–40 GB |
+
+Runtime uses `nvidia/cuda:*-cudnn-runtime` (no CUDA toolkit). Builder stage uses `cudnn-devel` only during `docker build`.
 
 ---
 
@@ -21,8 +25,8 @@ sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 
-# Verify
-docker run --rm --runtime=nvidia --gpus all nvidia/cuda:12.1.1-base-ubuntu22.04 nvidia-smi
+# Verify (driver >= 570 for CUDA 12.8)
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu22.04 nvidia-smi
 ```
 
 ---
@@ -30,34 +34,31 @@ docker run --rm --runtime=nvidia --gpus all nvidia/cuda:12.1.1-base-ubuntu22.04 
 ## Build
 
 ```bash
-# ROS2 Humble
+# SLAM runtime (smaller — default for robots)
 make build-humble
-# or: docker build -f docker/humble/Dockerfile -t vggt-slam-ros2:humble .
-
-# ROS2 Jazzy
 make build-jazzy
-# or: docker build -f docker/jazzy/Dockerfile -t vggt-slam-ros2:jazzy .
 
-# Both at once
-make build-all
+# Dev (RViz, colcon in entrypoint, matplotlib for eval-tum)
+make build-humble-dev
+make build-jazzy-dev
+
+# Free stale build cache (~100 GB possible after experiments)
+make docker-prune
 ```
 
-Build time: ~15–25 min (downloads PyTorch, VGGT, ROS2 packages).
-The VGGT-1B model (~2.4 GB) is **not** baked into the image — it is
-downloaded on first run and cached in the `hf_cache` Docker volume.
+Build time: ~15–30 min on first build (PyTorch, VGGT, ROS2). VGGT-1B is **not** in the image — cached in volume `vggt-slam-ros2_hf_cache`.
+
+`.dockerignore` excludes `data/`, `results/`, tests — do not remove.
 
 ---
 
 ## Run
 
 ```bash
-# ROS2 Humble (default camera topics)
-make run-humble
+make run-humble              # runtime image
+make run-humble-dev          # dev image (RViz / colcon)
 
-# ROS2 Jazzy with custom camera topic
-IMAGE_TOPIC=/camera/color/image_raw make run-jazzy
-
-# With a specific ROS2 domain ID
+IMAGE_TOPIC=/camera/color/image_raw make run-humble
 ROS_DOMAIN_ID=5 make run-humble
 ```
 
@@ -65,62 +66,55 @@ ROS_DOMAIN_ID=5 make run-humble
 
 | Variable | Default | Description |
 |---|---|---|
-| `IMAGE_TOPIC` | `/camera/image_raw` | Camera image topic on the robot |
+| `SLAM_IMAGE` | `vggt-slam-ros2:humble` | Override compose image tag |
+| `DOCKER_TARGET` | `runtime` | Compose build target (`runtime` / `dev`) |
+| `IMAGE_TOPIC` | `/camera/image_raw` | Camera image topic |
 | `CAMERA_INFO_TOPIC` | `/camera/camera_info` | Camera calibration topic |
-| `ROS_DOMAIN_ID` | `0` | Must match the robot's domain ID |
-| `DISPLAY` | `:0` | X11 display for RViz2 (if needed) |
+| `ROS_DOMAIN_ID` | `0` | Must match the robot |
+| `DISPLAY` | `:0` | X11 for RViz (dev image) |
+
+---
+
+## Demo / RViz
+
+```bash
+make build-humble-dev
+make demo
+```
+
+`make demo` sets `SLAM_IMAGE=vggt-slam-ros2:humble-dev` automatically.
 
 ---
 
 ## Connect to a robot
 
-The container uses `network_mode: host`, so it shares the host machine's
-network stack. DDS discovery works exactly like a native ROS2 node.
+`network_mode: host` — same DDS discovery as a native node. Set matching `ROS_DOMAIN_ID`.
 
-```
-Robot  ←── same LAN ──→  Host PC  ←── host network ──→  Docker container
-```
-
-**Steps:**
-
-1. Make sure the robot and host PC are on the same network.
-2. Set the same `ROS_DOMAIN_ID` on robot and container.
-3. Start the container — it will subscribe to the camera topic and publish
-   point clouds, poses, and TF automatically.
-
-### Unicast-only networks (no multicast)
-
-If the robot network blocks multicast, edit `docker/cyclonedds.xml`:
-
-```xml
-<General>
-  <AllowMulticast>false</AllowMulticast>
-</General>
-<Discovery>
-  <Peers>
-    <Peer Address="192.168.1.100"/>  <!-- robot IP -->
-  </Peers>
-</Discovery>
-```
-
-No image rebuild needed — the file is mounted as a volume.
+For unicast-only networks, edit `docker/cyclonedds.xml` (mounted volume, no rebuild).
 
 ---
 
 ## Interactive shell
 
 ```bash
-make shell-humble   # bash inside the Humble container
-make shell-jazzy    # bash inside the Jazzy container
-
-# Then inside the container:
-ros2 topic list
-ros2 topic echo /vggt_slam/pose
+make shell-humble
+make shell-humble-dev
 ```
 
 ## Stop and clean
 
 ```bash
-make stop     # stop containers
-make clean    # stop + remove images and hf_cache volume
+make stop
+make clean          # containers + local images + compose volumes
+make docker-prune   # build cache only (keeps images)
 ```
+
+---
+
+## Changing CMake / package.xml
+
+**Runtime image:** rebuild the image (`make build-humble`) — entrypoint has no colcon.
+
+**Dev image:** entrypoint runs `colcon` when build-critical files change (volumes preserve `install/`).
+
+Pure `.py` edits work with mounted source on both images (symlink-install from baked `install/` or volume).

@@ -53,6 +53,12 @@ if [ -f "${SRC}/CMakeLists.txt" ] || [ -f "${SRC}/setup.py" ]; then
     src_hash=$(_needs_rebuild) && REBUILD=1 || REBUILD=0
 
     if [ "${REBUILD}" -eq 1 ]; then
+        if ! command -v colcon >/dev/null 2>&1; then
+            echo "[entrypoint] ERROR: colcon is not available in this image (runtime target)." >&2
+            echo "[entrypoint] Rebuild the image after CMake/package changes, or use the dev image:" >&2
+            echo "[entrypoint]   make build-humble-dev   # or: docker build --target dev ..." >&2
+            exit 1
+        fi
         if ! _install_ok; then
             echo "[entrypoint] Install tree missing or outdated — rebuilding vggt_slam_ros2..."
         else
